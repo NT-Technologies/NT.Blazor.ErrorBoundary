@@ -10,7 +10,7 @@ public static class NTBlazorErrorBoundaryServiceCollectionExtensions {
     /// <summary>
     /// Adds an HTTP reporter for errors caught by <see cref="Components.NTErrorBoundary"/>.
     /// </summary>
-    public static IHttpClientBuilder AddNTBlazorErrorBoundary(this IServiceCollection services, string reportUri, string? environmentName = null) {
+    public static IHttpClientBuilder AddNTBlazorErrorBoundaryHttpClient(this IServiceCollection services, string reportUri, string? environmentName = null) {
 
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(reportUri);

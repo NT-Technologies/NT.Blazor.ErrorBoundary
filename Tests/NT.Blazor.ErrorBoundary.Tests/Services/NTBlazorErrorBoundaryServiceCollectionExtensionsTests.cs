@@ -6,17 +6,17 @@ namespace NT.Blazor.ErrorBoundary.Tests.Services;
 
 public sealed class NTBlazorErrorBoundaryServiceCollectionExtensionsTests {
     [Fact]
-    public void AddNTBlazorErrorBoundary_WhenReportUriIsBlank_Throws() {
+    public void AddNTBlazorErrorBoundaryHttpClient_WhenReportUriIsBlank_Throws() {
         var services = new ServiceCollection();
 
-        Assert.Throws<ArgumentException>(() => services.AddNTBlazorErrorBoundary(" "));
+        Assert.Throws<ArgumentException>(() => services.AddNTBlazorErrorBoundaryHttpClient(" "));
     }
 
     [Fact]
-    public void AddNTBlazorErrorBoundary_ConfiguresRequiredReportUri() {
+    public void AddNTBlazorErrorBoundaryHttpClient_ConfiguresRequiredReportUri() {
         var services = new ServiceCollection();
 
-        services.AddNTBlazorErrorBoundary("/api/errors");
+        services.AddNTBlazorErrorBoundaryHttpClient("/api/errors");
 
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<NTBlazorErrorBoundaryHttpClientOptions>>();
@@ -25,10 +25,10 @@ public sealed class NTBlazorErrorBoundaryServiceCollectionExtensionsTests {
     }
 
     [Fact]
-    public void AddNTBlazorErrorBoundary_WhenEnvironmentIsDevelopment_ConfiguresDevelopmentExceptionDetails() {
+    public void AddNTBlazorErrorBoundaryHttpClient_WhenEnvironmentIsDevelopment_ConfiguresDevelopmentExceptionDetails() {
         var services = new ServiceCollection();
 
-        services.AddNTBlazorErrorBoundary("/api/errors", "Development");
+        services.AddNTBlazorErrorBoundaryHttpClient("/api/errors", "Development");
 
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<NTErrorBoundaryOptions>>();
