@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests.csproj" />
+    <Project Path="Tests/NT.Blazor.ErrorBoundary.Tests/NT.Blazor.ErrorBoundary.Tests.csproj" />
+  </Folder>
+  <Project Path="NT.Blazor.ErrorBoundary/NT.Blazor.ErrorBoundary.csproj" />
+  <Project Path="NT.Blazor.ErrorBoundary.AspNetCore/NT.Blazor.ErrorBoundary.AspNetCore.csproj" />
+</Solution>

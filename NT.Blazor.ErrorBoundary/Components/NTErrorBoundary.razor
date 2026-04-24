@@ -1,0 +1,26 @@
+@inherits Microsoft.AspNetCore.Components.Web.ErrorBoundary
+
+@if (CurrentException is null) {
+    @ChildContent
+}
+else if (ErrorContent is not null) {
+    @ErrorContent(CurrentException)
+}
+else {
+    <section class="nt-blazor-error-boundary" role="alert">
+        <h2>Something went wrong.</h2>
+        <p>Refresh the page or try again.</p>
+        @if (ShouldRenderExceptionDetails) {
+            <details class="nt-blazor-error-boundary__details">
+                <summary>Exception details</summary>
+                <pre>@ExceptionDetails</pre>
+            </details>
+        }
+        @if (RendererInfo.IsInteractive) {
+            <button type="button" @onclick="Recover">Try again</button>
+        }
+        else {
+            <a href="@CurrentUri">Reload page</a>
+        }
+    </section>
+}
