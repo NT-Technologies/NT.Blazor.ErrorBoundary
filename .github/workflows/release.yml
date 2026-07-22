@@ -43,7 +43,7 @@ jobs:
         run: dotnet build ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
+        run: dotnet test --solution ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
 
       - name: Check for existing stable release tag
         id: check-tags
@@ -104,6 +104,49 @@ jobs:
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: dotnet nuget push "./artifacts/nuget/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Unlist older prerelease packages
+        if: steps.check-tags.outputs.is_tagged == 'false'
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          release_version="${{ steps.release-version.outputs.version }}"
+          python3 - "$release_version" <<'PY' > prerelease-versions-to-unlist.txt
+          import json
+          import sys
+          import urllib.request
+
+          release = tuple(int(part) for part in sys.argv[1].split("."))
+          packages = ("NT.Blazor.ErrorBoundary", "NT.Blazor.ErrorBoundary.AspNetCore")
+
+          def prerelease_is_lower(version):
+              version_without_build = version.split("+", 1)[0]
+              if "-" not in version_without_build:
+                  return False
+              core = version_without_build.split("-", 1)[0]
+              try:
+                  core_parts = tuple(int(part) for part in core.split("."))
+              except ValueError:
+                  return False
+              return core_parts <= release
+
+          for package in packages:
+              url = f"https://api.nuget.org/v3-flatcontainer/{package.lower()}/index.json"
+              with urllib.request.urlopen(url) as response:
+                  versions = json.load(response)["versions"]
+              for version in versions:
+                  if prerelease_is_lower(version):
+                      print(f"{package} {version}")
+          PY
+          if [ ! -s prerelease-versions-to-unlist.txt ]; then
+            echo "No prerelease packages older than $release_version were found."
+            exit 0
+          fi
+          while read -r package version; do
+            echo "Unlisting $package $version"
+            dotnet nuget delete "$package" "$version" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --non-interactive
+          done < prerelease-versions-to-unlist.txt
 
       - name: Delete stable tag on failure
         if: failure() && steps.check-tags.outputs.is_tagged == 'false'

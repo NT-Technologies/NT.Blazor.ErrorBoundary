@@ -1,9 +1,6 @@
 name: Build and Pack
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
   workflow_dispatch:
 
@@ -35,7 +32,19 @@ jobs:
         run: dotnet build ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
+        run: dotnet test --solution ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
+
+      - name: Collect code coverage
+        run: |
+          dotnet test --project ./Tests/NT.Blazor.ErrorBoundary.Tests/NT.Blazor.ErrorBoundary.Tests.csproj --framework net10.0 --configuration Release --no-build --no-restore --results-directory ./artifacts/coverage/core --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+          dotnet test --project ./Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests.csproj --framework net10.0 --configuration Release --no-build --no-restore --results-directory ./artifacts/coverage/aspnetcore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+
+      - name: Upload code coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: code-coverage
+          path: ./artifacts/coverage/**/*.xml
+          if-no-files-found: error
 
       - name: Pack
         run: |

@@ -1,7 +1,12 @@
 {
   "repositoryUrl": "https://github.com/NT-Technologies/NT.Blazor.ErrorBoundary.git",
   "branches": [
-    "main"
+    "main",
+    {
+      "name": "preview",
+      "prerelease": "preview",
+      "channel": "preview"
+    }
   ],
   "tagFormat": "v${version}",
   "plugins": [

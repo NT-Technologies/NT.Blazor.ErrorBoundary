@@ -292,8 +292,19 @@ The repository uses the SDK selected by `global.json` and builds both .NET 9 and
 ```shell
 dotnet restore ./NT.Blazor.ErrorBoundary.slnx
 dotnet build ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-restore
-dotnet test ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
+dotnet test --solution ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
 ```
+
+Tests use xUnit v3 on Microsoft.Testing.Platform v2. The .NET 10 SDK selects Microsoft.Testing.Platform through `global.json`; the test projects do not depend on VSTest, `Microsoft.NET.Test.Sdk`, or Coverlet.
+
+Generate Cobertura coverage with Microsoft's testing-platform coverage extension:
+
+```shell
+dotnet test --project ./Tests/NT.Blazor.ErrorBoundary.Tests/NT.Blazor.ErrorBoundary.Tests.csproj --framework net10.0 --configuration Release --no-build --no-restore --results-directory ./artifacts/coverage/core --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+dotnet test --project ./Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests.csproj --framework net10.0 --configuration Release --no-build --no-restore --results-directory ./artifacts/coverage/aspnetcore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+```
+
+The full suite validates both target frameworks. Coverage runs once against .NET 10 for each test project so parallel target frameworks cannot overwrite a shared output file. The `Build and Pack` workflow uploads both reports as the `code-coverage` artifact.
 
 Warnings are treated as errors across the repository. Packable projects generate XML documentation, so missing or invalid public API documentation also fails the build.
 
@@ -306,16 +317,18 @@ dotnet pack ./NT.Blazor.ErrorBoundary.AspNetCore/NT.Blazor.ErrorBoundary.AspNetC
 
 ## CI and releases
 
-The `Build and Pack` workflow runs for pull requests and pushes to `main`. It builds, tests, creates both NuGet packages and symbol packages, and uploads them as workflow artifacts.
+The `Build and Pack` workflow runs for pull requests and manual validation. It builds, tests, creates both NuGet packages and symbol packages, and uploads them as workflow artifacts.
 
-Stable publication follows the same semantic-release model as NTComponents:
+Publication follows the same preview and stable semantic-release model as NTComponents.
 
 1. Add the NuGet.org API key as the `NUGET_API_KEY` GitHub Actions secret.
 2. Merge release-worthy Conventional Commits into `main`.
-3. Run the manual `Release` workflow from GitHub Actions.
-4. The workflow builds and tests the repository.
-5. Semantic-release creates the `vX.Y.Z` tag and GitHub release.
-6. The workflow packs both packages with that version and publishes them and their symbols to NuGet.org.
+3. `Publish Prerelease` builds and tests the repository automatically.
+4. Semantic-release updates the `preview` branch and creates a `vX.Y.Z-preview.N` tag and GitHub prerelease.
+5. The same workflow packs both packages with that preview version and publishes them and their symbols to NuGet.org.
+6. When the preview is ready, run the manual `Release` workflow from GitHub Actions.
+7. The release workflow builds and tests again, creates the stable `vX.Y.Z` tag and GitHub release, and publishes both stable packages.
+8. After stable publication succeeds, the workflow unlists prerelease versions whose base version is at or below the stable release.
 
 Release calculation follows Conventional Commits:
 
@@ -324,4 +337,4 @@ Release calculation follows Conventional Commits:
 - `BREAKING CHANGE:` creates a major release.
 - Documentation, CI, and chore-only changes do not create a release by default.
 
-Do not create release tags manually. If there are no release-worthy commits since the previous tag, semantic-release does not create a new version and the release workflow stops without publishing.
+Do not create release tags manually. If a push to `main` contains no release-worthy commits, semantic-release creates no preview tag and prerelease publication is skipped. If the manual stable release has no release-worthy commits, no stable package is published.
