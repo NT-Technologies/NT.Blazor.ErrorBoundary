@@ -15,4 +15,9 @@
 ## Build and Test
 - Build the submodule with `dotnet build ./NT.Blazor.ErrorBoundary.slnx`.
 - Run tests with `dotnet test ./NT.Blazor.ErrorBoundary.slnx`.
+- Pack both libraries with `dotnet pack ./NT.Blazor.ErrorBoundary/NT.Blazor.ErrorBoundary.csproj --configuration Release` and `dotnet pack ./NT.Blazor.ErrorBoundary.AspNetCore/NT.Blazor.ErrorBoundary.AspNetCore.csproj --configuration Release`.
+- Run the manual `Release` GitHub Actions workflow to create a semantic-release tag and GitHub release, then publish both packages and their symbols to NuGet.org using the `NUGET_API_KEY` secret.
+- Use Conventional Commits: `fix` produces a patch release, `feat` produces a minor release, and a breaking change produces a major release.
+- `Directory.Build.props` enables SDK analyzers and treats all warnings as errors across the repository.
+- Packable projects generate XML documentation; missing public API documentation fails the build.
 - Keep public APIs documented with XML `<summary>` comments.

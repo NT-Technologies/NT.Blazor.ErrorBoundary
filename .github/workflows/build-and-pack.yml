@@ -1,0 +1,50 @@
+name: Build and Pack
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+
+jobs:
+  build-and-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore ./NT.Blazor.ErrorBoundary.slnx
+
+      - name: Build
+        run: dotnet build ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
+
+      - name: Pack
+        run: |
+          dotnet pack ./NT.Blazor.ErrorBoundary/NT.Blazor.ErrorBoundary.csproj --configuration Release --no-build --no-restore --output ./artifacts/packages
+          dotnet pack ./NT.Blazor.ErrorBoundary.AspNetCore/NT.Blazor.ErrorBoundary.AspNetCore.csproj --configuration Release --no-build --no-restore --output ./artifacts/packages
+
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-packages
+          path: ./artifacts/packages/*.*nupkg
+          if-no-files-found: error

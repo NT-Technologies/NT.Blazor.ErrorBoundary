@@ -16,7 +16,7 @@ namespace NT.Blazor.ErrorBoundary.AspNetCore;
 /// </summary>
 public static class NTBlazorErrorBoundaryAspNetCoreExtensions {
     /// <summary>
-    /// Adds a server-side logger for errors caught by <see cref="Components.NTErrorBoundary"/>.
+    /// Adds a server-side logger for errors caught by <see cref="NT.Blazor.ErrorBoundary.Components.NTErrorBoundary"/>.
     /// </summary>
     public static IServiceCollection AddBlazorErrorBoundaryServerLogging(this IServiceCollection services, string reportUri) {
         ArgumentNullException.ThrowIfNull(services);
