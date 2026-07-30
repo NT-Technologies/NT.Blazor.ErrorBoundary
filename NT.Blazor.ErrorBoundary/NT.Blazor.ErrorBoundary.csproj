@@ -4,11 +4,21 @@
     <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <WarningLevel>8</WarningLevel>
-    <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
     <ClientAssetsRoot>$(MSBuildProjectDirectory)\..</ClientAssetsRoot>
     <ClientAssetSource>$(MSBuildProjectDirectory)\wwwroot\nt-blazor-error-boundary.ts</ClientAssetSource>
     <ClientAssetOutput>$(MSBuildProjectDirectory)\wwwroot\nt-blazor-error-boundary.js</ClientAssetOutput>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <PackageId>NT.Blazor.ErrorBoundary</PackageId>
+    <Authors>NT Technologies</Authors>
+    <Description>Reusable Blazor error boundary reporting with generic fallback UI and configurable HTTP telemetry.</Description>
+    <PackageProjectUrl>https://github.com/NT-Technologies/NT.Blazor.ErrorBoundary</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>blazor;error-boundary;logging;telemetry</PackageTags>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/NT-Technologies/NT.Blazor.ErrorBoundary.git</RepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,24 +30,26 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.17" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.17" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.17" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.17" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>NT.Blazor.ErrorBoundary.Tests</_Parameter1>
     </AssemblyAttribute>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+
 
   <Target Name="RestoreClientAssetDependencies" Inputs="$(ClientAssetsRoot)\package-lock.json" Outputs="$(ClientAssetsRoot)\node_modules\.nt-blazor-error-boundary.restore.stamp">
     <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(ClientAssetsRoot)" />
@@ -49,5 +61,4 @@
   </Target>
 
   <Target Name="CompileCrossTargetingClientAssets" BeforeTargets="DispatchToInnerBuilds" Condition="'$(IsCrossTargetingBuild)' == 'true'" DependsOnTargets="CompileClientAssets" />
-
 </Project>

@@ -8,7 +8,7 @@ namespace Microsoft.Extensions.DependencyInjection;
 /// </summary>
 public static class NTBlazorErrorBoundaryServiceCollectionExtensions {
     /// <summary>
-    /// Adds an HTTP reporter for errors caught by <see cref="Components.NTErrorBoundary"/>.
+    /// Adds an HTTP reporter for errors caught by <see cref="NT.Blazor.ErrorBoundary.Components.NTErrorBoundary"/>.
     /// </summary>
     public static IHttpClientBuilder AddNTBlazorErrorBoundaryHttpClient(this IServiceCollection services, string reportUri, string? environmentName = null) {
 

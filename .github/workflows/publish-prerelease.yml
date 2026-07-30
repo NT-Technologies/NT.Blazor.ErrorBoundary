@@ -1,0 +1,154 @@
+name: Publish Prerelease
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore ./NT.Blazor.ErrorBoundary.slnx
+
+      - name: Build
+        run: dotnet build ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --solution ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
+
+  publish-prerelease:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Check for existing preview release tag
+        id: check-tags
+        run: |
+          git fetch --tags
+          if git tag --points-at HEAD | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+$'; then
+            echo "is_tagged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_tagged=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up .NET
+        if: steps.check-tags.outputs.is_tagged == 'false'
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Set up Node.js
+        if: steps.check-tags.outputs.is_tagged == 'false'
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          package-manager-cache: false
+
+      - name: Restore
+        if: steps.check-tags.outputs.is_tagged == 'false'
+        run: dotnet restore ./NT.Blazor.ErrorBoundary.slnx
+
+      - name: Build
+        if: steps.check-tags.outputs.is_tagged == 'false'
+        run: dotnet build ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-restore
+
+      - name: Install semantic-release
+        if: steps.check-tags.outputs.is_tagged == 'false'
+        run: npm install --no-save semantic-release @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/github conventional-changelog-conventionalcommits
+
+      - name: Create preview GitHub release
+        if: steps.check-tags.outputs.is_tagged == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git fetch --tags
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B preview HEAD
+          git push --force origin HEAD:preview
+          GITHUB_REF=refs/heads/preview GITHUB_REF_NAME=preview npx semantic-release
+
+      - name: Resolve preview package version
+        id: release-version
+        if: steps.check-tags.outputs.is_tagged == 'false'
+        run: |
+          set -euo pipefail
+          git fetch --tags
+          release_tag=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+$' | sort -V | tail -n 1 || true)
+          if [ -z "$release_tag" ]; then
+            echo "No preview release was created for this commit; skipping package publication."
+            echo "version=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "version=${release_tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate NuGet API key
+        if: steps.check-tags.outputs.is_tagged == 'false' && steps.release-version.outputs.version != ''
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "NUGET_API_KEY secret is missing or unavailable to this workflow."
+            exit 1
+          fi
+
+      - name: Pack NuGet packages
+        if: steps.check-tags.outputs.is_tagged == 'false' && steps.release-version.outputs.version != ''
+        run: |
+          set -euo pipefail
+          mkdir -p ./artifacts/nuget
+          dotnet pack ./NT.Blazor.ErrorBoundary/NT.Blazor.ErrorBoundary.csproj --configuration Release --no-build --no-restore --output ./artifacts/nuget -p:PackageVersion=${{ steps.release-version.outputs.version }}
+          dotnet pack ./NT.Blazor.ErrorBoundary.AspNetCore/NT.Blazor.ErrorBoundary.AspNetCore.csproj --configuration Release --no-build --no-restore --output ./artifacts/nuget -p:PackageVersion=${{ steps.release-version.outputs.version }}
+
+      - name: Publish NuGet packages
+        if: steps.check-tags.outputs.is_tagged == 'false' && steps.release-version.outputs.version != ''
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push "./artifacts/nuget/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Delete preview tag on failure
+        if: failure() && steps.check-tags.outputs.is_tagged == 'false'
+        run: |
+          set -euo pipefail
+          git fetch --tags
+          tags=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+$' || true)
+          if [ -z "$tags" ]; then
+            echo "No preview release tag found on this commit."
+            exit 0
+          fi
+          for tag in $tags; do
+            echo "Deleting failed preview release tag $tag"
+            git tag -d "$tag" || true
+            git push origin ":refs/tags/$tag"
+          done

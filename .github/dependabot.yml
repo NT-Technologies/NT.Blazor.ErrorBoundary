@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directories:
+      - /NT.Blazor.ErrorBoundary
+      - /NT.Blazor.ErrorBoundary.AspNetCore
+      - /Tests/NT.Blazor.ErrorBoundary.Tests
+      - /Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
