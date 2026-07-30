@@ -21,8 +21,8 @@ internal sealed class NTBlazorServerErrorReporter(ILogger<NTBlazorServerErrorRep
     private static Dictionary<string, object?> CreateScope(NTBlazorErrorBoundaryContext context) => new(StringComparer.Ordinal) {
         ["BlazorBoundaryName"] = context.BoundaryName,
         ["BlazorIsInteractive"] = context.IsInteractive,
+        ["BlazorOriginUri"] = context.OriginUri,
         ["BlazorRenderMode"] = context.RenderMode,
         ["BlazorUri"] = context.Uri
     };
 }
-

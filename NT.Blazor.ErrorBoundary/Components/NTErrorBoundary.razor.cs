@@ -13,6 +13,13 @@ public partial class NTErrorBoundary(INTBlazorErrorReporter _errorReporter, ILog
     private const string TruncatedExceptionDetailsMessage = "\n... exception details truncated ...";
 
     private string _exceptionDetails = string.Empty;
+    private string? _originUri;
+
+    /// <summary>
+    /// Gets or sets the diagnostic name of the component or page protected by this boundary.
+    /// </summary>
+    [Parameter]
+    public string? Name { get; set; }
 
     /// <summary>
     /// Gets or sets when fallback UI renders exception details.
@@ -31,6 +38,11 @@ public partial class NTErrorBoundary(INTBlazorErrorReporter _errorReporter, ILog
     };
 
     /// <inheritdoc />
+    protected override void OnInitialized() {
+        _originUri = _navigationManager.Uri;
+    }
+
+    /// <inheritdoc />
     protected override async Task OnErrorAsync(Exception exception) {
         _exceptionDetails = ShouldRenderExceptionDetails
             ? FormatExceptionDetails(exception)
@@ -38,8 +50,9 @@ public partial class NTErrorBoundary(INTBlazorErrorReporter _errorReporter, ILog
 
         try {
             await _errorReporter.ReportAsync(exception, new NTBlazorErrorBoundaryContext {
-                BoundaryName = GetType().FullName,
+                BoundaryName = string.IsNullOrWhiteSpace(Name) ? GetType().FullName : Name,
                 IsInteractive = RendererInfo.IsInteractive,
+                OriginUri = _originUri,
                 RenderMode = RendererInfo.Name,
                 Uri = _navigationManager.Uri
             });

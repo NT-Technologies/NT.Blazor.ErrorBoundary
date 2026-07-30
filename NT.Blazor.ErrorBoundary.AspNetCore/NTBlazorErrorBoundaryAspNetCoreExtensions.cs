@@ -7,7 +7,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NT.Blazor.ErrorBoundary.Models;
 using NT.Blazor.ErrorBoundary.Services;
+using System.Diagnostics;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace NT.Blazor.ErrorBoundary.AspNetCore;
 
@@ -64,7 +66,8 @@ public static class NTBlazorErrorBoundaryAspNetCoreExtensions {
             var exception = new ClientBlazorErrorReportException(truncatedReport);
             logger.LogError(
                 exception,
-                "Unhandled Blazor client exception caught by {BoundaryName}: {ExceptionType}",
+                "Blazor client report {ReportKind} caught by {BoundaryName}: {ExceptionType}",
+                truncatedReport.ReportKind,
                 truncatedReport.BoundaryName,
                 truncatedReport.ExceptionType);
         }
@@ -72,18 +75,38 @@ public static class NTBlazorErrorBoundaryAspNetCoreExtensions {
 
     private static Dictionary<string, object?> CreateScope(NTBlazorErrorReport report, HttpContext httpContext) {
         var scope = new Dictionary<string, object?>(StringComparer.Ordinal) {
+            ["ApplicationVersion"] = report.ApplicationVersion,
             ["BlazorBoundaryName"] = report.BoundaryName,
+            ["BlazorBreadcrumbs"] = JsonSerializer.Serialize(report.Breadcrumbs),
+            ["BlazorClientSessionId"] = report.ClientSessionId,
+            ["BlazorExceptionDetails"] = report.ExceptionDetails,
             ["BlazorExceptionMessage"] = report.ExceptionMessage,
             ["BlazorExceptionStackTrace"] = report.ExceptionStackTrace,
             ["BlazorExceptionType"] = report.ExceptionType,
+            ["BlazorIsNavigationIntercepted"] = report.IsNavigationIntercepted,
+            ["BlazorIsOnline"] = report.IsOnline,
             ["BlazorIsInteractive"] = report.IsInteractive,
+            ["BlazorJavaScriptColumn"] = report.JavaScriptColumn,
+            ["BlazorJavaScriptLine"] = report.JavaScriptLine,
+            ["BlazorJavaScriptSource"] = report.JavaScriptSource,
+            ["BlazorNavigationId"] = report.NavigationId,
+            ["BlazorNavigationPhase"] = report.NavigationPhase,
             ["BlazorOccurredAtUtc"] = report.OccurredAtUtc,
+            ["BlazorOriginUri"] = report.OriginUri,
             ["BlazorRenderMode"] = report.RenderMode,
+            ["BlazorReportKind"] = report.ReportKind,
+            ["BlazorTargetUri"] = report.TargetUri,
             ["BlazorUri"] = report.Uri,
             ["RequestId"] = httpContext.TraceIdentifier,
             ["RequestMethod"] = httpContext.Request.Method,
-            ["RequestPath"] = httpContext.Request.Path.Value
+            ["RequestPath"] = httpContext.Request.Path.Value,
+            ["UserAgent"] = httpContext.Request.Headers.UserAgent.ToString()
         };
+
+        if (Activity.Current is { } activity) {
+            scope["TraceId"] = activity.TraceId.ToString();
+            scope["SpanId"] = activity.SpanId.ToString();
+        }
 
         var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? httpContext.User.FindFirstValue("sub");
@@ -95,5 +118,5 @@ public static class NTBlazorErrorBoundaryAspNetCoreExtensions {
     }
 
     private sealed class ClientBlazorErrorReportException(NTBlazorErrorReport report)
-        : Exception($"{report.ExceptionType}: {report.ExceptionMessage}");
+        : Exception($"{report.ReportKind}: {report.ExceptionType}: {report.ExceptionMessage}");
 }

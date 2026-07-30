@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ES2022"
+    ],
+    "module": "None",
+    "noEmitOnError": true,
+    "outFile": ".client-assets/nt-blazor-error-boundary.js",
+    "removeComments": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022"
+  },
+  "include": [
+    "NT.Blazor.ErrorBoundary/wwwroot/**/*.ts"
+  ]
+}

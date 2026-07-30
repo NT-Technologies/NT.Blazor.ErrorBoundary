@@ -6,7 +6,18 @@
     <Nullable>enable</Nullable>
     <WarningLevel>8</WarningLevel>
     <TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+    <ClientAssetsRoot>$(MSBuildProjectDirectory)\..</ClientAssetsRoot>
+    <ClientAssetSource>$(MSBuildProjectDirectory)\wwwroot\nt-blazor-error-boundary.ts</ClientAssetSource>
+    <ClientAssetOutput>$(MSBuildProjectDirectory)\wwwroot\nt-blazor-error-boundary.js</ClientAssetOutput>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Remove="wwwroot\nt-blazor-error-boundary.js" />
+    <Content Remove="wwwroot\nt-blazor-error-boundary.ts" />
+    <None Remove="wwwroot\nt-blazor-error-boundary.ts" />
+    <Content Include="wwwroot\nt-blazor-error-boundary.js" />
+    <None Include="wwwroot\nt-blazor-error-boundary.ts" Pack="false" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
+  </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.17" />
@@ -27,5 +38,16 @@
       <_Parameter1>NT.Blazor.ErrorBoundary.Tests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
+
+  <Target Name="RestoreClientAssetDependencies" Inputs="$(ClientAssetsRoot)\package-lock.json" Outputs="$(ClientAssetsRoot)\node_modules\.nt-blazor-error-boundary.restore.stamp">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(ClientAssetsRoot)" />
+    <Touch Files="$(ClientAssetsRoot)\node_modules\.nt-blazor-error-boundary.restore.stamp" AlwaysCreate="true" />
+  </Target>
+
+  <Target Name="CompileClientAssets" BeforeTargets="ResolveProjectStaticWebAssets" DependsOnTargets="RestoreClientAssetDependencies" Inputs="$(ClientAssetSource);$(ClientAssetsRoot)\package.json;$(ClientAssetsRoot)\package-lock.json;$(ClientAssetsRoot)\tsconfig.json" Outputs="$(ClientAssetOutput)">
+    <Exec Command="npm run build" WorkingDirectory="$(ClientAssetsRoot)" />
+  </Target>
+
+  <Target Name="CompileCrossTargetingClientAssets" BeforeTargets="DispatchToInnerBuilds" Condition="'$(IsCrossTargetingBuild)' == 'true'" DependsOnTargets="CompileClientAssets" />
 
 </Project>

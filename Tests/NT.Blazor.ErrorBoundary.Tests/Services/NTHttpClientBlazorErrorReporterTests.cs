@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.JSInterop;
 using NT.Blazor.ErrorBoundary.Models;
 using NT.Blazor.ErrorBoundary.Services;
 using System.Net;
@@ -34,9 +35,54 @@ public sealed class NTHttpClientBlazorErrorReporterTests {
         Assert.Equal("Boundary", report.BoundaryName);
         Assert.Equal("client failure", report.ExceptionMessage);
         Assert.Equal(typeof(InvalidOperationException).FullName, report.ExceptionType);
+        Assert.Contains("client failure", report.ExceptionDetails, StringComparison.Ordinal);
         Assert.True(report.IsInteractive);
         Assert.Equal("WebAssembly", report.RenderMode);
         Assert.Equal("https://example.test/claims", report.Uri);
+    }
+
+    [Fact]
+    public async Task ReportAsync_WhenBrowserBridgeAvailable_EnrichesAndSubmitsDurably() {
+        var handler = new CapturingHandler(HttpStatusCode.InternalServerError);
+        var jsRuntime = new CapturingJsRuntime(new NTBlazorClientContext {
+            ApplicationVersion = "4.13.0",
+            Breadcrumbs = [
+                new NTBlazorBreadcrumb {
+                    OccurredAtUtc = DateTimeOffset.UtcNow,
+                    Phase = "LocationChanging",
+                    TargetUri = "https://example.test/Claims/Recovery/64469",
+                    Uri = "https://example.test/Claims/Manage/64469"
+                }
+            ],
+            ClientSessionId = "session-123",
+            CurrentUri = "https://example.test/Claims/Recovery/64469",
+            IsNavigationIntercepted = true,
+            IsOnline = true,
+            NavigationId = "navigation-123",
+            NavigationPhase = "LocationChanging",
+            OriginUri = "https://example.test/Claims/Manage/64469",
+            TargetUri = "https://example.test/Claims/Recovery/64469"
+        });
+        var reporter = CreateReporter(handler, jsRuntime: jsRuntime);
+
+        await reporter.ReportAsync(
+            new InvalidOperationException("client failure"),
+            new NTBlazorErrorBoundaryContext {
+                BoundaryName = "Claims.Management",
+                OriginUri = "https://example.test/Claims/Manage/64469",
+                Uri = "https://example.test/Claims/Recovery/64469"
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(handler.Request);
+        var report = Assert.IsType<NTBlazorErrorReport>(jsRuntime.SubmittedReport);
+        Assert.Equal("4.13.0", report.ApplicationVersion);
+        Assert.Equal("Claims.Management", report.BoundaryName);
+        Assert.Equal("navigation-123", report.NavigationId);
+        Assert.Equal("LocationChanging", report.NavigationPhase);
+        Assert.Equal("https://example.test/Claims/Manage/64469", report.OriginUri);
+        Assert.Equal("https://example.test/Claims/Recovery/64469", report.TargetUri);
+        Assert.Single(report.Breadcrumbs);
     }
 
     [Fact]
@@ -73,18 +119,39 @@ public sealed class NTHttpClientBlazorErrorReporterTests {
         Assert.Contains("report field truncated", report.ExceptionMessage, StringComparison.Ordinal);
     }
 
-    private static NTHttpClientBlazorErrorReporter CreateReporter(CapturingHandler handler, int? maxReportFieldLength = null) {
+    private static NTHttpClientBlazorErrorReporter CreateReporter(CapturingHandler handler, int? maxReportFieldLength = null, IJSRuntime? jsRuntime = null) {
         var httpClient = new HttpClient(handler) {
             BaseAddress = new Uri("https://example.test/")
         };
 
         return new NTHttpClientBlazorErrorReporter(
             httpClient,
+            jsRuntime ?? new CapturingJsRuntime(),
             Options.Create(new NTBlazorErrorBoundaryHttpClientOptions {
                 ReportUri = "/api/errors",
                 MaxReportFieldLength = maxReportFieldLength ?? NTBlazorErrorBoundaryHttpClientOptions.DefaultMaxReportFieldLength
             }),
             NullLogger<NTHttpClientBlazorErrorReporter>.Instance);
+    }
+
+    private sealed class CapturingJsRuntime(NTBlazorClientContext? context = null) : IJSRuntime {
+        public object? SubmittedReport { get; private set; }
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) =>
+            InvokeAsync<TValue>(identifier, CancellationToken.None, args);
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) {
+            if (identifier == "NTBlazorErrorBoundary.getContext" && context is not null) {
+                return ValueTask.FromResult((TValue)(object)context);
+            }
+
+            if (identifier == "NTBlazorErrorBoundary.submitReport" && context is not null) {
+                SubmittedReport = args?[0];
+                return ValueTask.FromResult((TValue)(object)true);
+            }
+
+            throw new JSException("Browser bridge unavailable.");
+        }
     }
 
     private sealed class CapturingHandler(HttpStatusCode statusCode) : HttpMessageHandler {

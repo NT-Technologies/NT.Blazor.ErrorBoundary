@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using NT.Blazor.ErrorBoundary.AspNetCore;
 using NT.Blazor.ErrorBoundary.Models;
 using NT.Blazor.ErrorBoundary.Services;
+using System.Diagnostics;
 using System.Security.Claims;
 
 namespace NT.Blazor.ErrorBoundary.AspNetCore.Tests.AspNetCore;
@@ -55,34 +56,67 @@ public sealed class NTBlazorErrorBoundaryAspNetCoreExtensionsTests {
         };
         httpContext.Request.Method = HttpMethods.Post;
         httpContext.Request.Path = "/api/v1/Telemetry/BlazorError";
+        httpContext.Request.Headers.UserAgent = "Telemetry Test Browser";
         var report = new NTBlazorErrorReport {
+            ApplicationVersion = "4.13.0",
             BoundaryName = "Boundary",
+            Breadcrumbs = [
+                new NTBlazorBreadcrumb {
+                    OccurredAtUtc = DateTimeOffset.UtcNow,
+                    Phase = "LocationChanging",
+                    TargetUri = "https://example.test/claims/recovery/64469",
+                    Uri = "https://example.test/claims/manage/64469"
+                }
+            ],
+            ClientSessionId = "session-123",
+            ExceptionDetails = "complete exception",
             ExceptionMessage = "client failure",
             ExceptionStackTrace = "stack",
             ExceptionType = typeof(InvalidOperationException).FullName,
             IsInteractive = true,
+            IsNavigationIntercepted = true,
+            IsOnline = true,
+            NavigationId = "navigation-123",
+            NavigationPhase = "LocationChanging",
             OccurredAtUtc = DateTimeOffset.UtcNow,
+            OriginUri = "https://example.test/claims/manage/64469",
             RenderMode = "WebAssembly",
+            TargetUri = "https://example.test/claims/recovery/64469",
             Uri = "https://example.test/claims"
         };
 
+        using var activity = new Activity("client-report-test").Start();
         NTBlazorErrorBoundaryAspNetCoreExtensions.LogClientReport(logger, report, httpContext);
 
         var entry = Assert.Single(loggerProvider.Entries);
         Assert.Equal(LogLevel.Error, entry.LogLevel);
         Assert.NotNull(entry.Exception);
-        Assert.Contains("Unhandled Blazor client exception", entry.Message, StringComparison.Ordinal);
+        Assert.Contains("Blazor client report Exception", entry.Message, StringComparison.Ordinal);
         Assert.Equal("Boundary", entry.ScopeValues["BlazorBoundaryName"]);
+        Assert.Equal("4.13.0", entry.ScopeValues["ApplicationVersion"]);
+        Assert.Contains("LocationChanging", Assert.IsType<string>(entry.ScopeValues["BlazorBreadcrumbs"]), StringComparison.Ordinal);
+        Assert.Equal("session-123", entry.ScopeValues["BlazorClientSessionId"]);
+        Assert.Equal("complete exception", entry.ScopeValues["BlazorExceptionDetails"]);
         Assert.Equal("client failure", entry.ScopeValues["BlazorExceptionMessage"]);
         Assert.Equal("stack", entry.ScopeValues["BlazorExceptionStackTrace"]);
         Assert.Equal(typeof(InvalidOperationException).FullName, entry.ScopeValues["BlazorExceptionType"]);
         Assert.Equal(true, entry.ScopeValues["BlazorIsInteractive"]);
+        Assert.Equal(true, entry.ScopeValues["BlazorIsNavigationIntercepted"]);
+        Assert.Equal(true, entry.ScopeValues["BlazorIsOnline"]);
+        Assert.Equal("navigation-123", entry.ScopeValues["BlazorNavigationId"]);
+        Assert.Equal("LocationChanging", entry.ScopeValues["BlazorNavigationPhase"]);
+        Assert.Equal("https://example.test/claims/manage/64469", entry.ScopeValues["BlazorOriginUri"]);
         Assert.Equal("WebAssembly", entry.ScopeValues["BlazorRenderMode"]);
+        Assert.Equal(NTBlazorReportKinds.Exception, entry.ScopeValues["BlazorReportKind"]);
+        Assert.Equal("https://example.test/claims/recovery/64469", entry.ScopeValues["BlazorTargetUri"]);
         Assert.Equal("https://example.test/claims", entry.ScopeValues["BlazorUri"]);
         Assert.Equal("request-123", entry.ScopeValues["RequestId"]);
         Assert.Equal(HttpMethods.Post, entry.ScopeValues["RequestMethod"]);
         Assert.Equal("/api/v1/Telemetry/BlazorError", entry.ScopeValues["RequestPath"]);
         Assert.Equal("user-123", entry.ScopeValues["UserId"]);
+        Assert.Equal("Telemetry Test Browser", entry.ScopeValues["UserAgent"]);
+        Assert.Equal(activity.TraceId.ToString(), entry.ScopeValues["TraceId"]);
+        Assert.Equal(activity.SpanId.ToString(), entry.ScopeValues["SpanId"]);
     }
 
     [Fact]

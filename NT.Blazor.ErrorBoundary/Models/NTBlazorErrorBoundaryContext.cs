@@ -10,6 +10,11 @@ public sealed record NTBlazorErrorBoundaryContext {
     public string? BoundaryName { get; init; }
 
     /// <summary>
+    /// Gets the browser URI where the boundary instance was created.
+    /// </summary>
+    public string? OriginUri { get; init; }
+
+    /// <summary>
     /// Gets whether the boundary was rendered interactively when the error was caught.
     /// </summary>
     public bool? IsInteractive { get; init; }

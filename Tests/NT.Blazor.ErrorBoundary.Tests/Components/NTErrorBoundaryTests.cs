@@ -27,9 +27,18 @@ public sealed class NTErrorBoundaryTests : BunitContext {
         Assert.Same(ThrowingComponent.Exception, _reporter.Exception);
         Assert.NotNull(_reporter.Context);
         Assert.Equal(typeof(NTErrorBoundary).FullName, _reporter.Context.BoundaryName);
+        Assert.Equal(Services.GetRequiredService<NavigationManager>().Uri, _reporter.Context.OriginUri);
         Assert.Equal("WebAssembly", _reporter.Context.RenderMode);
         Assert.True(_reporter.Context.IsInteractive);
         Assert.Equal(Services.GetRequiredService<NavigationManager>().Uri, _reporter.Context.Uri);
+    }
+
+    [Fact]
+    public void ChildThrows_WithName_ReportsOwningComponentName() {
+        RenderBoundary(name: "Claims.Management");
+
+        Assert.NotNull(_reporter.Context);
+        Assert.Equal("Claims.Management", _reporter.Context.BoundaryName);
     }
 
     [Fact]
@@ -104,7 +113,7 @@ public sealed class NTErrorBoundaryTests : BunitContext {
         Assert.Empty(cut.FindAll("button"));
     }
 
-    private IRenderedComponent<IComponent> RenderBoundary(ExceptionDetailsMode? renderExceptionDetails = null) => Render(builder => {
+    private IRenderedComponent<IComponent> RenderBoundary(ExceptionDetailsMode? renderExceptionDetails = null, string? name = null) => Render(builder => {
         builder.OpenComponent<NTErrorBoundary>(0);
         builder.AddAttribute(1, nameof(NTErrorBoundary.ChildContent), (RenderFragment)(childBuilder => {
             childBuilder.OpenComponent<ThrowingComponent>(0);
@@ -112,6 +121,9 @@ public sealed class NTErrorBoundaryTests : BunitContext {
         }));
         if (renderExceptionDetails.HasValue) {
             builder.AddAttribute(2, nameof(NTErrorBoundary.RenderExceptionDetails), renderExceptionDetails.Value);
+        }
+        if (name is not null) {
+            builder.AddAttribute(3, nameof(NTErrorBoundary.Name), name);
         }
         builder.CloseComponent();
     });

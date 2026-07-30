@@ -300,6 +300,8 @@ FakesAssemblies/
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
+.client-assets/
+NT.Blazor.ErrorBoundary/wwwroot/nt-blazor-error-boundary.js
 
 # Visual Studio 6 build log
 *.plg
