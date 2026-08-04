@@ -1,15 +1,72 @@
+# yaml-language-server: $schema=https://json.schemastore.org/dependabot-2.0.json
 version: 2
-updates:
-  - package-ecosystem: nuget
-    directories:
-      - /NT.Blazor.ErrorBoundary
-      - /NT.Blazor.ErrorBoundary.AspNetCore
-      - /Tests/NT.Blazor.ErrorBoundary.Tests
-      - /Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests
-    schedule:
-      interval: weekly
 
-  - package-ecosystem: github-actions
-    directory: /
+updates:
+  - package-ecosystem: "nuget"
+    directories:
+      - "/NT.Blazor.ErrorBoundary"
+      - "/NT.Blazor.ErrorBoundary.AspNetCore"
+      - "/Tests/NT.Blazor.ErrorBoundary.Tests"
+      - "/Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests"
     schedule:
-      interval: weekly
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Denver"
+    groups:
+      nuget-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "06:00"
+      timezone: "America/Denver"
+    groups:
+      npm-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "America/Denver"
+    groups:
+      actions-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "dotnet-sdk"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "06:00"
+      timezone: "America/Denver"
+    commit-message:
+      prefix: "chore"
+      include: "scope"

@@ -48,8 +48,12 @@ jobs:
 
       - name: Pack
         run: |
+          set -euo pipefail
           dotnet pack ./NT.Blazor.ErrorBoundary/NT.Blazor.ErrorBoundary.csproj --configuration Release --no-build --no-restore --output ./artifacts/packages
           dotnet pack ./NT.Blazor.ErrorBoundary.AspNetCore/NT.Blazor.ErrorBoundary.AspNetCore.csproj --configuration Release --no-build --no-restore --output ./artifacts/packages
+          core_package=$(find ./artifacts/packages -maxdepth 1 -type f -name 'NT.Blazor.ErrorBoundary.*.nupkg' ! -name 'NT.Blazor.ErrorBoundary.AspNetCore.*' ! -name '*.snupkg' -print -quit)
+          test -n "$core_package"
+          unzip -p "$core_package" staticwebassets/nt-blazor-error-boundary.js > /dev/null
 
       - name: Upload NuGet packages
         uses: actions/upload-artifact@v7
