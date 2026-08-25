@@ -2,7 +2,7 @@
   "name": "nt-blazor-error-boundary-client-assets",
   "private": true,
   "devDependencies": {
-    "terser": "5.49.2",
+    "terser": "5.50.0",
     "typescript": "5.4.5"
   },
   "scripts": {
