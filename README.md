@@ -282,6 +282,61 @@ Reports received from WebAssembly additionally include:
 
 The HTTP reporter treats network and non-success response failures as reporting failures, logs a warning, and does not rethrow them into the component tree. Cancellation requested by the caller is preserved.
 
+### OpenTelemetry host setup
+
+Configure OpenTelemetry in the consuming ASP.NET Core host. Both the server reporter and the browser-report endpoint use the host's `ILogger` pipeline. Install these packages in the host project (use compatible versions from the same OpenTelemetry release):
+
+```shell
+dotnet add package OpenTelemetry.Extensions.Hosting
+dotnet add package OpenTelemetry.Exporter.OpenTelemetryProtocol
+dotnet add package OpenTelemetry.Instrumentation.AspNetCore
+```
+
+Add the following to `Program.cs`, alongside the app's existing Blazor registration and endpoint mapping:
+
+```csharp
+using NT.Blazor.ErrorBoundary.AspNetCore;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+
+var builder = WebApplication.CreateBuilder(args);
+var serviceName = builder.Environment.ApplicationName;
+
+builder.Services.AddBlazorErrorBoundaryServerLogging("/api/blazor-errors");
+
+builder.Logging.AddOpenTelemetry(options => {
+    options.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName));
+    options.IncludeScopes = true;
+    options.IncludeFormattedMessage = true;
+    options.AddOtlpExporter();
+});
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService(serviceName))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddOtlpExporter());
+
+var app = builder.Build();
+app.MapBlazorErrorBoundaryTelemetry();
+// Keep the app's existing Blazor endpoints and middleware here.
+app.Run();
+```
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` to your collector endpoint. For example, `http://localhost:4317` with `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` uses OTLP over gRPC. The report URI (`/api/blazor-errors`) is a separate application endpoint accepting the package's JSON reports; it is not an OTLP collector endpoint. For WebAssembly, configure the client reporter and browser bridge with that same report URI as described above.
+
+If the host already configures OpenTelemetry (for example through shared service defaults), update that registration instead of adding another exporter pipeline. Ensure that logging is enabled as well as tracing, that filters allow `Error` logs from `NT.Blazor.ErrorBoundary`, and that `IncludeScopes` is enabled. Most boundary, browser, and request fields are scope values; `IncludeFormattedMessage` additionally preserves the readable message. See the official [logging configuration](https://github.com/open-telemetry/opentelemetry-dotnet/blob/main/docs/logs/customizing-the-sdk/README.md) and [log correlation](https://opentelemetry.io/docs/languages/dotnet/logs/correlation/) documentation.
+
+Current correlation and exception behavior:
+
+- Server reports retain the original exception. OpenTelemetry populates the log's trace and span IDs when an `Activity` is active. The library does not create an activity for interactive callbacks that lack one.
+- Browser reports correlate with the receiving HTTP request's activity. The browser transport does not capture or explicitly propagate the original operation's W3C trace context, including across queued retries. `BlazorClientSessionId` and `BlazorNavigationId` are searchable diagnostic fields, not distributed trace IDs.
+- Browser exceptions are logged as `ClientBlazorErrorReportException`. Their original type, message, stack, and full details are preserved in `BlazorExceptionType`, `BlazorExceptionMessage`, `BlazorExceptionStackTrace`, and `BlazorExceptionDetails`. Backends grouping by standard exception fields may group them by the wrapper type.
+- A successful upload returns HTTP 204 even though its log describes an error. The library does not mark the upload span as failed or emit custom spans or metrics. Queued reports retain their occurrence time in `BlazorOccurredAtUtc`; the server log is emitted when the report arrives.
+
+The integration tests use the real OpenTelemetry SDK and in-memory log/trace exporters to verify both reporting paths on .NET 9 and .NET 10. They cover scope preservation, exception data, and correlation with an exported span, including an HTTP request through the mapped endpoint. They do not validate collector connectivity or backend-specific exception grouping. Preserving original browser trace context and mapping browser exceptions to standard telemetry fields remain follow-up work.
+
 ## Securing the telemetry endpoint
 
 The package intentionally does not choose authorization, CORS, rate-limiting, or telemetry-retention policy for the host. The mapped endpoint accepts exception messages and stack traces, so treat it as diagnostic ingestion rather than a general public API.
