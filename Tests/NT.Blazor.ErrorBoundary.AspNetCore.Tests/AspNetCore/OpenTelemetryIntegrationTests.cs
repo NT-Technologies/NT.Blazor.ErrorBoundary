@@ -66,10 +66,10 @@ public sealed class OpenTelemetryIntegrationTests {
     [Fact]
     public async Task ClientReportEndpoint_ExportsDiagnosticFieldsAndUploadTraceCorrelation() {
         var logs = new List<LogRecord>();
-        var spans = new List<Activity>();
+        var exporter = new TestActivityExporter(ActivityTraceId.CreateFromString("1234567890abcdef1234567890abcdef"));
         using var tracerProvider = Sdk.CreateTracerProviderBuilder()
             .AddAspNetCoreInstrumentation()
-            .AddInMemoryExporter(spans)
+            .AddProcessor(new SimpleActivityExportProcessor(exporter))
             .Build();
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -101,9 +101,11 @@ public sealed class OpenTelemetryIntegrationTests {
         };
 
         using var response = await client.PostAsJsonAsync("/api/errors", report, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        // TestServer can return the response before request teardown ends and exports the activity.
+        var span = await exporter.ExportedActivity.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         await app.StopAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         var log = Assert.Single(logs, entry => entry.CategoryName == "NT.Blazor.ErrorBoundary.ClientReport");
         Assert.Equal(LogLevel.Error, log.LogLevel);
         Assert.NotNull(log.Exception);
@@ -111,7 +113,8 @@ public sealed class OpenTelemetryIntegrationTests {
         Assert.Contains(report.ExceptionMessage, log.Exception.Message, StringComparison.Ordinal);
         Assert.Contains("OrderPage", log.FormattedMessage, StringComparison.Ordinal);
         Assert.Equal("1234567890abcdef1234567890abcdef", log.TraceId.ToString());
-        var span = Assert.Single(spans, entry => entry.TraceId == log.TraceId && entry.SpanId == log.SpanId);
+        Assert.Equal(log.TraceId, span.TraceId);
+        Assert.Equal(log.SpanId, span.SpanId);
         Assert.Equal(ActivityKind.Server, span.Kind);
         Assert.Equal("1234567890abcdef", span.ParentSpanId.ToString());
         var fields = ReadScopes(log);
