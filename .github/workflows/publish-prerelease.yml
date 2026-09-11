@@ -80,7 +80,9 @@ jobs:
 
       - name: Install semantic-release
         if: steps.check-tags.outputs.is_tagged == 'false'
-        run: npm install --no-save semantic-release @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/github conventional-changelog-conventionalcommits
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
 
       - name: Create preview GitHub release
         if: steps.check-tags.outputs.is_tagged == 'false'
@@ -93,7 +95,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B preview HEAD
           git push --force origin HEAD:preview
-          GITHUB_REF=refs/heads/preview GITHUB_REF_NAME=preview npx semantic-release
+          GITHUB_REF=refs/heads/preview GITHUB_REF_NAME=preview npx --no-install semantic-release
 
       - name: Resolve preview package version
         id: release-version

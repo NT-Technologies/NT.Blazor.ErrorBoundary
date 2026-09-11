@@ -34,6 +34,9 @@ jobs:
       - name: Test
         run: dotnet test --solution ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
 
+      - name: Test release tooling
+        run: npm test
+
       - name: Collect code coverage
         run: |
           dotnet test --project ./Tests/NT.Blazor.ErrorBoundary.Tests/NT.Blazor.ErrorBoundary.Tests.csproj --framework net10.0 --configuration Release --no-build --no-restore --results-directory ./artifacts/coverage/core --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
