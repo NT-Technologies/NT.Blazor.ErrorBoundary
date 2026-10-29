@@ -51,7 +51,7 @@
   </ItemGroup>
 
 
-  <Target Name="RestoreClientAssetDependencies" Inputs="$(ClientAssetsRoot)\package-lock.json" Outputs="$(ClientAssetsRoot)\node_modules\.nt-blazor-error-boundary.restore.stamp">
+  <Target Name="RestoreClientAssetDependencies" Inputs="$(ClientAssetsRoot)\package-lock.json" Outputs="$(ClientAssetsRoot)\node_modules\.nt-blazor-error-boundary.restore.stamp;$(ClientAssetsRoot)\node_modules\.bin\tsc">
     <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(ClientAssetsRoot)" />
     <Touch Files="$(ClientAssetsRoot)\node_modules\.nt-blazor-error-boundary.restore.stamp" AlwaysCreate="true" />
   </Target>
