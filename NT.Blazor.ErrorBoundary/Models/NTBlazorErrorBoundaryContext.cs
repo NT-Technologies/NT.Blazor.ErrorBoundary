@@ -20,6 +20,11 @@ public sealed record NTBlazorErrorBoundaryContext {
     public bool? IsInteractive { get; init; }
 
     /// <summary>
+    /// Gets the short user-visible reference that correlates the fallback UI with the logged report.
+    /// </summary>
+    public string? ReferenceId { get; init; }
+
+    /// <summary>
     /// Gets the renderer name that handled the boundary.
     /// </summary>
     public string? RenderMode { get; init; }

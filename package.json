@@ -11,7 +11,7 @@
     "typescript": "5.4.5"
   },
   "scripts": {
-    "test": "node --test scripts/release-notes.test.mjs",
+    "test": "node --test scripts/release-notes.test.mjs Tests/ClientAssets/nt-blazor-error-boundary.test.mjs",
     "build": "tsc --project tsconfig.json && terser .client-assets/nt-blazor-error-boundary.js --compress --mangle --comments false --output NT.Blazor.ErrorBoundary/wwwroot/nt-blazor-error-boundary.js",
     "check": "tsc --noEmit --project tsconfig.json"
   }

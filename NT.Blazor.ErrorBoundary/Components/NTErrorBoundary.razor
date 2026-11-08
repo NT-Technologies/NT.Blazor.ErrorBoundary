@@ -1,26 +1,31 @@
 @inherits Microsoft.AspNetCore.Components.Web.ErrorBoundary
+@implements IDisposable
 
 @if (CurrentException is null) {
     @ChildContent
+}
+else if (FallbackContent is not null) {
+    @FallbackContent(new NTErrorBoundaryFailure(CurrentException, _referenceId))
 }
 else if (ErrorContent is not null) {
     @ErrorContent(CurrentException)
 }
 else {
     <section class="nt-blazor-error-boundary" role="alert">
-        <h2>Something went wrong.</h2>
-        <p>Refresh the page or try again.</p>
+        <div class="nt-blazor-error-title" role="heading" aria-level="@Level">@Title</div>
+        <p class="nt-blazor-error-message">@Message</p>
+        <p class="nt-blazor-error-reference">@ReferenceLabel: <span>@_referenceId</span></p>
         @if (ShouldRenderExceptionDetails) {
-            <details class="nt-blazor-error-boundary__details">
+            <details class="nt-blazor-error-details">
                 <summary>Exception details</summary>
-                <pre>@ExceptionDetails</pre>
+                <pre>@_exceptionDetails</pre>
             </details>
         }
         @if (RendererInfo.IsInteractive) {
-            <button type="button" @onclick="Recover">Try again</button>
+            <button type="button" @onclick="Recover">@RetryText</button>
         }
         else {
-            <a href="@CurrentUri">Reload page</a>
+            <a href="@_navigationManager.Uri">@ReloadText</a>
         }
     </section>
 }

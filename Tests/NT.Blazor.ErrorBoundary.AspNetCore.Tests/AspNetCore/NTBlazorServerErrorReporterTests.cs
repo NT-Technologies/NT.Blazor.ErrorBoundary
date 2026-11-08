@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using NT.Blazor.ErrorBoundary.AspNetCore;
+using Microsoft.Extensions.Options;
 using NT.Blazor.ErrorBoundary.Models;
+using NT.Blazor.ErrorBoundary.Services;
 
 namespace NT.Blazor.ErrorBoundary.AspNetCore.Tests.AspNetCore;
 
@@ -11,7 +13,7 @@ public sealed class NTBlazorServerErrorReporterTests {
         using var loggerFactory = LoggerFactory.Create(builder => builder
             .SetMinimumLevel(LogLevel.Trace)
             .AddProvider(loggerProvider));
-        var reporter = new NTBlazorServerErrorReporter(loggerFactory.CreateLogger<NTBlazorServerErrorReporter>());
+        var reporter = new NTBlazorServerErrorReporter(loggerFactory.CreateLogger<NTBlazorServerErrorReporter>(), Options.Create(new NTBlazorErrorBoundaryHttpClientOptions { ReportUri = "/api/errors" }), new NTBlazorCircuitContext());
         var exception = new InvalidOperationException("server failure");
         var context = new NTBlazorErrorBoundaryContext {
             BoundaryName = "Boundary",

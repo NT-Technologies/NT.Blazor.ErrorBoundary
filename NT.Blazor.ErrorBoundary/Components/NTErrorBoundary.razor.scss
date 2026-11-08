@@ -1,42 +1,57 @@
-.nt-blazor-error-boundary {
-    --nt-error-boundary-accent: #b42318;
+// Theme values are read from custom properties with defaults, so an app can set them on any ancestor (for example :root)
+// without competing with the scoped selectors' specificity.
+$accent: var(--nt-error-boundary-accent, #b42318);
+$background: var(--nt-error-boundary-background, #fff4f4);
+$color: var(--nt-error-boundary-color, #5f1414);
+$button-color: var(--nt-error-boundary-button-color, #ffffff);
+$radius: var(--nt-error-boundary-radius, 0);
+$spacing: var(--nt-error-boundary-spacing, 0.5rem);
 
+.nt-blazor-error-boundary {
     align-items: flex-start;
-    background: #fff4f4;
-    border-left: 4px solid var(--nt-error-boundary-accent);
-    color: #5f1414;
+    background: $background;
+    border-left: 4px solid $accent;
+    border-radius: $radius;
+    color: $color;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    margin: 0.5rem;
-    padding: 1rem;
+    gap: $spacing;
+    margin: $spacing;
+    padding: calc(#{$spacing} * 2);
 
-    h2,
-    p {
-        margin: 0;
-    }
-
-    h2 {
+    .nt-blazor-error-title {
         font-size: 1.125rem;
         font-weight: 600;
         line-height: 1.4;
     }
 
     p {
+        margin: 0;
         font-size: 0.95rem;
         line-height: 1.4;
     }
 
+    .nt-blazor-error-reference {
+        font-size: 0.85rem;
+        opacity: 0.85;
+
+        span {
+            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+            user-select: all;
+        }
+    }
+
     button {
-        background: var(--nt-error-boundary-accent);
+        background: $accent;
         border: 0;
-        color: #ffffff;
+        border-radius: $radius;
+        color: $button-color;
         cursor: pointer;
         font: inherit;
         padding: 0.5rem 0.75rem;
     }
 
-    &__details {
+    .nt-blazor-error-details {
         max-width: 100%;
 
         pre {

@@ -13,6 +13,12 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "America/Denver"
+    # Framework packages are pinned per target framework; a new major belongs to a new target framework.
+    ignore:
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
     groups:
       nuget-minor-and-patch:
         patterns:

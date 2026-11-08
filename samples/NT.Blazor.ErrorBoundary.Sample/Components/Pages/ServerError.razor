@@ -1,0 +1,10 @@
+@page "/server-error"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<h1>Interactive Server boundary</h1>
+
+<NTErrorBoundary Name="ServerBoundary">
+    <BombButton Message="server boom" />
+</NTErrorBoundary>
+
+<a id="same-page" href="/server-error?again=1">Navigate within the page</a>

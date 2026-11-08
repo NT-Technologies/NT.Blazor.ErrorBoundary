@@ -14,10 +14,10 @@ namespace NT.Blazor.ErrorBoundary.AspNetCore.Tests.AspNetCore;
 
 public sealed class NTBlazorErrorBoundaryAspNetCoreExtensionsTests {
     [Fact]
-    public void AddBlazorErrorBoundaryServerLogging_ConfiguresReportUri() {
+    public void AddNTBlazorErrorBoundaryServerLogging_ConfiguresReportUri() {
         var services = new ServiceCollection();
 
-        services.AddBlazorErrorBoundaryServerLogging("/api/errors");
+        services.AddNTBlazorErrorBoundaryServerLogging("/api/errors");
 
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<NTBlazorErrorBoundaryHttpClientOptions>>();
@@ -26,14 +26,14 @@ public sealed class NTBlazorErrorBoundaryAspNetCoreExtensionsTests {
     }
 
     [Fact]
-    public void MapBlazorErrorBoundaryTelemetry_UsesConfiguredReportUri() {
+    public void MapNTBlazorErrorBoundaryTelemetry_UsesConfiguredReportUri() {
         var builder = WebApplication.CreateBuilder();
         builder.Services.Configure<NTBlazorErrorBoundaryHttpClientOptions>(options => {
             options.ReportUri = "/api/errors";
         });
         using var app = builder.Build();
 
-        app.MapBlazorErrorBoundaryTelemetry();
+        app.MapNTBlazorErrorBoundaryTelemetry();
 
         var routeEndpoint = Assert.Single(((IEndpointRouteBuilder)app).DataSources
             .SelectMany(dataSource => dataSource.Endpoints)
@@ -120,13 +120,13 @@ public sealed class NTBlazorErrorBoundaryAspNetCoreExtensionsTests {
     }
 
     [Fact]
-    public void LogClientReport_WhenReportFieldsExceedMaximum_TruncatesStructuredFields() {
+    public void HandleClientReport_WhenReportFieldsExceedMaximum_TruncatesStructuredFields() {
         var loggerProvider = new TestLoggerProvider();
         using var loggerFactory = LoggerFactory.Create(builder => builder
             .SetMinimumLevel(LogLevel.Trace)
             .AddProvider(loggerProvider));
         var logger = loggerFactory.CreateLogger("test");
-        var httpContext = new DefaultHttpContext();
+        var httpContext = new DefaultHttpContext { RequestServices = new ServiceCollection().BuildServiceProvider() };
         httpContext.Request.Method = HttpMethods.Post;
         httpContext.Request.Path = "/api/errors";
         var report = new NTBlazorErrorReport {
@@ -138,7 +138,7 @@ public sealed class NTBlazorErrorBoundaryAspNetCoreExtensionsTests {
             Uri = $"https://example.test/{new string('u', 200)}"
         };
 
-        NTBlazorErrorBoundaryAspNetCoreExtensions.LogClientReport(logger, report, httpContext, 64);
+        NTBlazorErrorBoundaryAspNetCoreExtensions.HandleClientReport(logger, report, httpContext, new NTBlazorErrorBoundaryHttpClientOptions { ReportUri = "/api/errors", MaxReportFieldLength = 64 });
 
         var entry = Assert.Single(loggerProvider.Entries);
         var message = Assert.IsType<string>(entry.ScopeValues["BlazorExceptionMessage"]);

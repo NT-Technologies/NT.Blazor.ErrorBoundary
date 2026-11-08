@@ -53,4 +53,9 @@ public sealed record NTBlazorClientContext {
     /// Gets the sanitized current navigation target URI.
     /// </summary>
     public string? TargetUri { get; init; }
+
+    /// <summary>
+    /// Gets the W3C <c>traceparent</c> of the server request that rendered the current document.
+    /// </summary>
+    public string? TraceParent { get; init; }
 }

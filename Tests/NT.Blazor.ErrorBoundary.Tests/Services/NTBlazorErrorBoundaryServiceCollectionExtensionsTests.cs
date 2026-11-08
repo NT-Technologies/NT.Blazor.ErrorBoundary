@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NT.Blazor.ErrorBoundary.Services;
 
@@ -34,5 +35,15 @@ public sealed class NTBlazorErrorBoundaryServiceCollectionExtensionsTests {
         var options = provider.GetRequiredService<IOptions<NTErrorBoundaryOptions>>();
 
         Assert.True(options.Value.IsDevelopmentEnvironment);
+    }
+
+    [Fact]
+    public void AddNTBlazorErrorBoundaryHttpClient_WhenCalledTwice_RegistersUnhandledExceptionLoggerOnce() {
+        var services = new ServiceCollection();
+
+        services.AddNTBlazorErrorBoundaryHttpClient("/api/errors");
+        services.AddNTBlazorErrorBoundaryHttpClient("/api/errors");
+
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ILoggerProvider));
     }
 }

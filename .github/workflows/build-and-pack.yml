@@ -31,10 +31,15 @@ jobs:
       - name: Build
         run: dotnet build ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-restore
 
+      - name: Install Playwright browsers
+        run: pwsh ./Tests/NT.Blazor.ErrorBoundary.EndToEnd.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
       - name: Test
+        env:
+          NT_E2E_REQUIRED: true
         run: dotnet test --solution ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
 
-      - name: Test release tooling
+      - name: Test release tooling and browser script
         run: npm test
 
       - name: Collect code coverage
@@ -57,6 +62,7 @@ jobs:
           core_package=$(find ./artifacts/packages -maxdepth 1 -type f -name 'NT.Blazor.ErrorBoundary.*.nupkg' ! -name 'NT.Blazor.ErrorBoundary.AspNetCore.*' ! -name '*.snupkg' -print -quit)
           test -n "$core_package"
           unzip -p "$core_package" staticwebassets/nt-blazor-error-boundary.js > /dev/null
+          unzip -l "$core_package" | grep -Eq 'staticwebassets/NT\.Blazor\.ErrorBoundary\.[a-z0-9]+\.bundle\.scp\.css'
 
       - name: Upload NuGet packages
         uses: actions/upload-artifact@v7

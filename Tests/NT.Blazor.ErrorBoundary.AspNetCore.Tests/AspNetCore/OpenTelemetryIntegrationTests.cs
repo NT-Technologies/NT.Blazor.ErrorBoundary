@@ -29,7 +29,7 @@ public sealed class OpenTelemetryIntegrationTests {
             options.IncludeFormattedMessage = true;
             options.AddInMemoryExporter(logs);
         }));
-        services.AddBlazorErrorBoundaryServerLogging("/api/errors");
+        services.AddNTBlazorErrorBoundaryServerLogging("/api/errors");
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         var reporter = scope.ServiceProvider.GetRequiredService<INTBlazorErrorReporter>();
@@ -80,9 +80,9 @@ public sealed class OpenTelemetryIntegrationTests {
             options.IncludeFormattedMessage = true;
             options.AddInMemoryExporter(logs);
         });
-        builder.Services.AddBlazorErrorBoundaryServerLogging("/api/errors");
+        builder.Services.AddNTBlazorErrorBoundaryServerLogging("/api/errors");
         await using var app = builder.Build();
-        app.MapBlazorErrorBoundaryTelemetry();
+        app.MapNTBlazorErrorBoundaryTelemetry();
         await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("traceparent", "00-1234567890abcdef1234567890abcdef-1234567890abcdef-01");
@@ -96,7 +96,7 @@ public sealed class OpenTelemetryIntegrationTests {
             ApplicationVersion = "2.0.0",
             ClientSessionId = "session-123",
             NavigationId = "navigation-456",
-            OccurredAtUtc = new DateTimeOffset(2026, 9, 10, 12, 0, 0, TimeSpan.Zero),
+            OccurredAtUtc = DateTimeOffset.UtcNow,
             Uri = "https://example.test/orders/42"
         };
 
@@ -110,7 +110,9 @@ public sealed class OpenTelemetryIntegrationTests {
         Assert.Equal(LogLevel.Error, log.LogLevel);
         Assert.NotNull(log.Exception);
         Assert.Equal("ClientBlazorErrorReportException", log.Exception.GetType().Name);
-        Assert.Contains(report.ExceptionMessage, log.Exception.Message, StringComparison.Ordinal);
+        Assert.Equal(report.ExceptionMessage, log.Exception.Message);
+        Assert.Equal(report.ExceptionStackTrace, log.Exception.StackTrace);
+        Assert.Equal(report.ExceptionDetails, log.Exception.ToString());
         Assert.Contains("OrderPage", log.FormattedMessage, StringComparison.Ordinal);
         Assert.Equal("1234567890abcdef1234567890abcdef", log.TraceId.ToString());
         Assert.Equal(log.TraceId, span.TraceId);

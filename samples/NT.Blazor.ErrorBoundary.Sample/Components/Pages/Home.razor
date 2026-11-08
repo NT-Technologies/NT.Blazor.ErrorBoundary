@@ -1,0 +1,10 @@
+@page "/"
+
+<h1>NT.Blazor.ErrorBoundary sample</h1>
+
+<button type="button" id="js-error" onclick="throw new Error('sample javascript failure')">Throw JavaScript error</button>
+
+<ul>
+    <li><a href="/stall">Stall and ready links</a></li>
+    <li><a href="/wasm-unhandled">WebAssembly exception outside a boundary</a></li>
+</ul>

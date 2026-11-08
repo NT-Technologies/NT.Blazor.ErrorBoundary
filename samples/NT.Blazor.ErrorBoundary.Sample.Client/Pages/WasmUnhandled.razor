@@ -1,0 +1,6 @@
+@page "/wasm-unhandled"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+
+<h1>WebAssembly exception outside a boundary</h1>
+
+<BombButton Message="wasm unhandled boom" />

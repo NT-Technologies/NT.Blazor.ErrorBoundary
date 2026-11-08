@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "Sample": {
+      "commandName": "Project",
+      "applicationUrl": "http://localhost:5199",
+      "environmentName": "Development"
+    }
+  }
+}

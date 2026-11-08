@@ -99,6 +99,11 @@ public sealed class NTBlazorErrorReport {
     public string? OriginUri { get; init; }
 
     /// <summary>
+    /// Gets the short user-visible reference shown in the fallback UI.
+    /// </summary>
+    public string? ReferenceId { get; init; }
+
+    /// <summary>
     /// Gets the report classification, such as Exception, JavaScriptError, or NavigationStalled.
     /// </summary>
     public string ReportKind { get; init; } = NTBlazorReportKinds.Exception;
@@ -112,6 +117,11 @@ public sealed class NTBlazorErrorReport {
     /// Gets the current navigation target URI.
     /// </summary>
     public string? TargetUri { get; init; }
+
+    /// <summary>
+    /// Gets the W3C <c>traceparent</c> of the server request that rendered the document where the error occurred.
+    /// </summary>
+    public string? TraceParent { get; init; }
 
     /// <summary>
     /// Gets the browser URI active when the error was caught.
@@ -133,9 +143,10 @@ public sealed class NTBlazorErrorReport {
             ExceptionType = Truncate(exception.GetType().FullName, maxFieldLength),
             IsInteractive = context.IsInteractive,
             OccurredAtUtc = DateTimeOffset.UtcNow,
-            OriginUri = Truncate(context.OriginUri, maxFieldLength),
+            OriginUri = Truncate(RemoveQueryAndFragment(context.OriginUri), maxFieldLength),
+            ReferenceId = Truncate(context.ReferenceId, maxFieldLength),
             RenderMode = Truncate(context.RenderMode, maxFieldLength),
-            Uri = Truncate(context.Uri, maxFieldLength)
+            Uri = Truncate(RemoveQueryAndFragment(context.Uri), maxFieldLength)
         };
     }
 
@@ -155,6 +166,7 @@ public sealed class NTBlazorErrorReport {
             navigationPhase: context.NavigationPhase,
             originUri: OriginUri ?? context.OriginUri,
             targetUri: context.TargetUri,
+            traceParent: TraceParent ?? context.TraceParent,
             uri: context.CurrentUri ?? Uri,
             maxFieldLength);
     }
@@ -173,11 +185,12 @@ public sealed class NTBlazorErrorReport {
             NavigationPhase,
             OriginUri,
             TargetUri,
+            TraceParent,
             Uri,
             maxFieldLength);
     }
 
-    private NTBlazorErrorReport Copy(string? applicationVersion, IReadOnlyList<NTBlazorBreadcrumb> breadcrumbs, string? clientSessionId, bool? isOnline, bool? isNavigationIntercepted, string? navigationId, string? navigationPhase, string? originUri, string? targetUri, string? uri, int maxFieldLength) {
+    private NTBlazorErrorReport Copy(string? applicationVersion, IReadOnlyList<NTBlazorBreadcrumb> breadcrumbs, string? clientSessionId, bool? isOnline, bool? isNavigationIntercepted, string? navigationId, string? navigationPhase, string? originUri, string? targetUri, string? traceParent, string? uri, int maxFieldLength) {
         return new NTBlazorErrorReport {
             ApplicationVersion = Truncate(applicationVersion, maxFieldLength),
             BoundaryName = Truncate(BoundaryName, maxFieldLength),
@@ -206,23 +219,26 @@ public sealed class NTBlazorErrorReport {
             NavigationPhase = Truncate(navigationPhase, maxFieldLength),
             OccurredAtUtc = OccurredAtUtc,
             OriginUri = Truncate(originUri, maxFieldLength),
+            ReferenceId = Truncate(ReferenceId, maxFieldLength),
             RenderMode = Truncate(RenderMode, maxFieldLength),
             ReportKind = Truncate(ReportKind, maxFieldLength) ?? NTBlazorReportKinds.Exception,
             TargetUri = Truncate(targetUri, maxFieldLength),
+            TraceParent = Truncate(traceParent, maxFieldLength),
             Uri = Truncate(uri, maxFieldLength)
         };
     }
 
-    private static string? Truncate(string? value, int maxLength) {
+    private static string? RemoveQueryAndFragment(string? uri) {
+        var index = uri.AsSpan().IndexOfAny('?', '#');
+        return index < 0 ? uri : uri![..index];
+    }
+
+    internal static string? Truncate(string? value, int maxLength, string marker = TruncatedReportFieldMessage) {
         if (string.IsNullOrEmpty(value) || maxLength <= 0 || value.Length <= maxLength) {
             return value;
         }
 
-        if (maxLength <= TruncatedReportFieldMessage.Length) {
-            return value[..maxLength];
-        }
-
-        return string.Concat(value.AsSpan(0, maxLength - TruncatedReportFieldMessage.Length), TruncatedReportFieldMessage);
+        return maxLength <= marker.Length ? value[..maxLength] : string.Concat(value.AsSpan(0, maxLength - marker.Length), marker);
     }
 }
 
@@ -249,4 +265,19 @@ public static class NTBlazorReportKinds {
     /// A navigation that failed to reach its expected completion marker.
     /// </summary>
     public const string NavigationStalled = "NavigationStalled";
+
+    /// <summary>
+    /// A Blazor framework resource, such as <c>blazor.web.js</c> or a <c>_framework</c> file, that failed to load.
+    /// </summary>
+    public const string ResourceLoadFailed = "ResourceLoadFailed";
+
+    /// <summary>
+    /// A Blazor Server circuit that could not reconnect or was rejected by the server.
+    /// </summary>
+    public const string ReconnectFailed = "ReconnectFailed";
+
+    /// <summary>
+    /// Gets whether <paramref name="reportKind"/> is one of the standard classifications.
+    /// </summary>
+    public static bool IsKnown(string? reportKind) => reportKind is Exception or JavaScriptError or JavaScriptUnhandledRejection or NavigationStalled or ResourceLoadFailed or ReconnectFailed;
 }
