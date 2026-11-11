@@ -11,6 +11,8 @@
     <Description>ASP.NET Core logging and telemetry endpoint integration for NT.Blazor.ErrorBoundary.</Description>
     <PackageProjectUrl>https://github.com/NT-Technologies/NT.Blazor.ErrorBoundary</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>Logo.png</PackageIcon>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>aspnetcore;blazor;error-boundary;logging;telemetry</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/NT-Technologies/NT.Blazor.ErrorBoundary.git</RepositoryUrl>
@@ -39,6 +41,7 @@
       <_Parameter1>NT.Blazor.ErrorBoundary.AzureMonitor.Tests</_Parameter1>
     </AssemblyAttribute>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\Logo.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
