@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <PackageId>NT.Blazor.ErrorBoundary.AzureMonitor</PackageId>
+    <Authors>NT Technologies</Authors>
+    <Description>Sends every NT.Blazor.ErrorBoundary error and event to Azure Monitor Application Insights directly, unaffected by trace sampling: server and browser exceptions as native exceptions with their original type and parsed stack, and navigation, reconnection, and circuit events as custom events.</Description>
+    <PackageProjectUrl>https://github.com/NT-Technologies/NT.Blazor.ErrorBoundary</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>aspnetcore;blazor;error-boundary;azure-monitor;application-insights</PackageTags>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/NT-Technologies/NT.Blazor.ErrorBoundary.git</RepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- Azure.Core only for TokenCredential, so hosts can use Microsoft Entra authentication. OpenTelemetry only for SuppressInstrumentationScope, which keeps
+       the add-on's own uploads out of the host's traces; the Azure Monitor distro already depends on it. Floors stay low so the host's versions win. -->
+  <ItemGroup>
+    <PackageReference Include="Azure.Core" Version="1.44.1" />
+    <PackageReference Include="OpenTelemetry" Version="1.15.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NT.Blazor.ErrorBoundary.AspNetCore\NT.Blazor.ErrorBoundary.AspNetCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>NT.Blazor.ErrorBoundary.AzureMonitor.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

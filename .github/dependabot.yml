@@ -6,8 +6,10 @@ updates:
     directories:
       - "/NT.Blazor.ErrorBoundary"
       - "/NT.Blazor.ErrorBoundary.AspNetCore"
+      - "/NT.Blazor.ErrorBoundary.AzureMonitor"
       - "/Tests/NT.Blazor.ErrorBoundary.Tests"
       - "/Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests"
+      - "/Tests/NT.Blazor.ErrorBoundary.AzureMonitor.Tests"
     schedule:
       interval: "weekly"
       day: "monday"

@@ -1,0 +1,111 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Blazor errors\nErrors and events from NT.Blazor.ErrorBoundary, grouped by `blazor.error.fingerprint`. Browser errors logged without the Azure Monitor add-on share one problem ID in the Failures view; the fingerprint groups them here."
+      },
+      "name": "header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "4f1c2b8e-6a51-4d1f-9b0e-2f7d3c9a1e01",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "exceptions\n| extend Kind = tostring(customDimensions['blazor.report.kind']), Fingerprint = tostring(customDimensions['blazor.error.fingerprint'])\n| where isnotempty(Fingerprint)\n| extend Source = iff(isempty(Kind), \"server\", \"client\"),\n    ErrorType = coalesce(tostring(customDimensions['blazor.exception.type']), type),\n    Message = coalesce(tostring(customDimensions['blazor.exception.message']), outerMessage),\n    User = coalesce(user_AuthenticatedId, user_Id),\n    FirstSeen = timestamp,\n    LastSeen = timestamp,\n    FirstVersion = coalesce(tostring(customDimensions['blazor.app.version']), application_Version),\n    LastVersion = coalesce(tostring(customDimensions['blazor.app.version']), application_Version)\n| summarize Occurrences = count(),\n    Users = dcountif(User, isnotempty(User)),\n    Sessions = dcountif(session_Id, isnotempty(session_Id)),\n    arg_min(FirstSeen, FirstVersion),\n    arg_max(LastSeen, LastVersion),\n    Message = take_any(Message),\n    Boundary = take_any(tostring(customDimensions['blazor.boundary.name'])),\n    Url = take_any(tostring(customDimensions['url.full']))\n    by Fingerprint, Source, ErrorType\n| order by Occurrences desc",
+        "size": 0,
+        "title": "Errors by fingerprint",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      },
+      "name": "errors-by-fingerprint"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let blazorErrors = (start: datetime, end: datetime) {\n    exceptions\n    | where timestamp between (start .. end)\n    | extend Fingerprint = tostring(customDimensions['blazor.error.fingerprint'])\n    | where isnotempty(Fingerprint)\n};\nlet known = blazorErrors(ago(14d), ago(1d)) | distinct Fingerprint;\nblazorErrors(ago(1d), now())\n| extend FirstSeen = timestamp, FirstVersion = coalesce(tostring(customDimensions['blazor.app.version']), application_Version)\n| summarize Occurrences = count(),\n    arg_min(FirstSeen, FirstVersion),\n    ErrorType = take_any(coalesce(tostring(customDimensions['blazor.exception.type']), type)),\n    Message = take_any(coalesce(tostring(customDimensions['blazor.exception.message']), outerMessage))\n    by Fingerprint\n| join kind=leftanti known on Fingerprint\n| order by FirstSeen desc",
+        "size": 0,
+        "title": "New in the last day (not seen in the 13 days before)",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "table"
+      },
+      "name": "new-errors"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "exceptions\n| extend Kind = tostring(customDimensions['blazor.report.kind']), Fingerprint = tostring(customDimensions['blazor.error.fingerprint'])\n| where isnotempty(Fingerprint)\n| extend Source = iff(isempty(Kind), \"server\", \"client\"),\n    ErrorType = coalesce(tostring(customDimensions['blazor.exception.type']), type),\n    Message = coalesce(tostring(customDimensions['blazor.exception.message']), outerMessage),\n    User = coalesce(user_AuthenticatedId, user_Id)\n| summarize Errors = count() by Source, bin(timestamp, {TimeRange:grain})\n| render timechart",
+        "size": 0,
+        "title": "Errors over time by source",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      },
+      "name": "errors-over-time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customEvents\n| where name startswith \"blazor.\"\n| summarize Events = count() by name, bin(timestamp, {TimeRange:grain})\n| render timechart",
+        "size": 0,
+        "title": "Blazor events (stalled navigation, failed reconnection, circuit connection changes)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "visualization": "timechart"
+      },
+      "name": "blazor-events"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

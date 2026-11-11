@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/Tests/">
     <Project Path="Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests.csproj" />
+    <Project Path="Tests/NT.Blazor.ErrorBoundary.AzureMonitor.Tests/NT.Blazor.ErrorBoundary.AzureMonitor.Tests.csproj" />
     <Project Path="Tests/NT.Blazor.ErrorBoundary.EndToEnd.Tests/NT.Blazor.ErrorBoundary.EndToEnd.Tests.csproj" />
     <Project Path="Tests/NT.Blazor.ErrorBoundary.Tests/NT.Blazor.ErrorBoundary.Tests.csproj" />
   </Folder>
@@ -8,6 +9,7 @@
     <Project Path="samples/NT.Blazor.ErrorBoundary.Sample.Client/NT.Blazor.ErrorBoundary.Sample.Client.csproj" />
     <Project Path="samples/NT.Blazor.ErrorBoundary.Sample/NT.Blazor.ErrorBoundary.Sample.csproj" />
   </Folder>
+  <Project Path="NT.Blazor.ErrorBoundary.AzureMonitor/NT.Blazor.ErrorBoundary.AzureMonitor.csproj" />
   <Project Path="NT.Blazor.ErrorBoundary/NT.Blazor.ErrorBoundary.csproj" />
   <Project Path="NT.Blazor.ErrorBoundary.AspNetCore/NT.Blazor.ErrorBoundary.AspNetCore.csproj" />
 </Solution>

@@ -47,6 +47,7 @@ jobs:
         run: |
           dotnet test --project ./Tests/NT.Blazor.ErrorBoundary.Tests/NT.Blazor.ErrorBoundary.Tests.csproj --framework net10.0 --configuration Release --no-build --no-restore --results-directory ./artifacts/coverage/core --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
           dotnet test --project ./Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests/NT.Blazor.ErrorBoundary.AspNetCore.Tests.csproj --framework net10.0 --configuration Release --no-build --no-restore --results-directory ./artifacts/coverage/aspnetcore --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+          dotnet test --project ./Tests/NT.Blazor.ErrorBoundary.AzureMonitor.Tests/NT.Blazor.ErrorBoundary.AzureMonitor.Tests.csproj --framework net10.0 --configuration Release --no-build --no-restore --results-directory ./artifacts/coverage/azuremonitor --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
 
       - name: Upload code coverage
         uses: actions/upload-artifact@v7
@@ -60,7 +61,8 @@ jobs:
           set -euo pipefail
           dotnet pack ./NT.Blazor.ErrorBoundary/NT.Blazor.ErrorBoundary.csproj --configuration Release --no-build --no-restore --output ./artifacts/packages
           dotnet pack ./NT.Blazor.ErrorBoundary.AspNetCore/NT.Blazor.ErrorBoundary.AspNetCore.csproj --configuration Release --no-build --no-restore --output ./artifacts/packages
-          core_package=$(find ./artifacts/packages -maxdepth 1 -type f -name 'NT.Blazor.ErrorBoundary.*.nupkg' ! -name 'NT.Blazor.ErrorBoundary.AspNetCore.*' ! -name '*.snupkg' -print -quit)
+          dotnet pack ./NT.Blazor.ErrorBoundary.AzureMonitor/NT.Blazor.ErrorBoundary.AzureMonitor.csproj --configuration Release --no-build --no-restore --output ./artifacts/packages
+          core_package=$(find ./artifacts/packages -maxdepth 1 -type f -name 'NT.Blazor.ErrorBoundary.*.nupkg' ! -name 'NT.Blazor.ErrorBoundary.AspNetCore.*' ! -name 'NT.Blazor.ErrorBoundary.AzureMonitor.*' ! -name '*.snupkg' -print -quit)
           test -n "$core_package"
           unzip -p "$core_package" staticwebassets/nt-blazor-error-boundary.js > /dev/null
           unzip -l "$core_package" | grep -Eq 'staticwebassets/NT\.Blazor\.ErrorBoundary\.[a-z0-9]+\.bundle\.scp\.css'

@@ -8,12 +8,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.6.0" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="11.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\NT.Blazor.ErrorBoundary.Sample.Client\NT.Blazor.ErrorBoundary.Sample.Client.csproj" />
     <ProjectReference Include="..\..\NT.Blazor.ErrorBoundary.AspNetCore\NT.Blazor.ErrorBoundary.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\NT.Blazor.ErrorBoundary.AzureMonitor\NT.Blazor.ErrorBoundary.AzureMonitor.csproj" />
   </ItemGroup>
 
 </Project>
