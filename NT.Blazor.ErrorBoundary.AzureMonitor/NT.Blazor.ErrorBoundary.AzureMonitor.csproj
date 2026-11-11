@@ -27,8 +27,8 @@
   <!-- Azure.Core only for TokenCredential, so hosts can use Microsoft Entra authentication. OpenTelemetry only for SuppressInstrumentationScope, which keeps
        the add-on's own uploads out of the host's traces; the Azure Monitor distro already depends on it. Floors stay low so the host's versions win. -->
   <ItemGroup>
-    <PackageReference Include="Azure.Core" Version="1.44.1" />
-    <PackageReference Include="OpenTelemetry" Version="1.15.3" />
+    <PackageReference Include="Azure.Core" Version="1.65.0" />
+    <PackageReference Include="OpenTelemetry" Version="1.20.1" />
   </ItemGroup>
 
   <ItemGroup>
