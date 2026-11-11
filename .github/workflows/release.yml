@@ -4,18 +4,41 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   DOTNET_NOLOGO: true
 
 jobs:
-  publish-release:
+  # Fails the run before anything is tagged when the trusted publishing policy or NUGET_USER is missing.
+  # Only this job and publish can request an OIDC token, and neither runs npm or repository code.
+  nuget-login-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+
+    steps:
+      - name: NuGet login (OIDC)
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+  release:
+    needs: nuget-login-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      version: ${{ steps.release-version.outputs.version }}
 
     steps:
       - name: Check out main
@@ -28,6 +51,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v6
         with:
+          dotnet-version: 10.0.x
           global-json-file: global.json
 
       - name: Set up Node.js
@@ -42,7 +66,12 @@ jobs:
       - name: Build
         run: dotnet build ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-restore
 
+      - name: Install Playwright browsers
+        run: pwsh ./Tests/NT.Blazor.ErrorBoundary.EndToEnd.Tests/bin/Release/net11.0/playwright.ps1 install --with-deps chromium
+
       - name: Test
+        env:
+          NT_E2E_REQUIRED: true
         run: dotnet test --solution ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
 
       - name: Check for existing stable release tag
@@ -60,15 +89,6 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm test
-
-      - name: Validate NuGet API key
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          if [ -z "$NUGET_API_KEY" ]; then
-            echo "NUGET_API_KEY secret is missing or unavailable to this workflow."
-            exit 1
-          fi
 
       - name: Create stable GitHub release
         if: steps.check-tags.outputs.is_tagged == 'false'
@@ -97,26 +117,61 @@ jobs:
           mkdir -p ./artifacts/nuget
           dotnet pack ./NT.Blazor.ErrorBoundary/NT.Blazor.ErrorBoundary.csproj --configuration Release --no-build --no-restore --output ./artifacts/nuget -p:PackageVersion=${{ steps.release-version.outputs.version }}
           dotnet pack ./NT.Blazor.ErrorBoundary.AspNetCore/NT.Blazor.ErrorBoundary.AspNetCore.csproj --configuration Release --no-build --no-restore --output ./artifacts/nuget -p:PackageVersion=${{ steps.release-version.outputs.version }}
+          dotnet pack ./NT.Blazor.ErrorBoundary.AzureMonitor/NT.Blazor.ErrorBoundary.AzureMonitor.csproj --configuration Release --no-build --no-restore --output ./artifacts/nuget -p:PackageVersion=${{ steps.release-version.outputs.version }}
           unzip -p "./artifacts/nuget/NT.Blazor.ErrorBoundary.${{ steps.release-version.outputs.version }}.nupkg" staticwebassets/nt-blazor-error-boundary.js > /dev/null
+
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-packages
+          path: ./artifacts/nuget/*.*nupkg
+          if-no-files-found: error
+
+  # Re-running this job alone republishes the same packages and unlists again; both steps are safe to repeat.
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download NuGet packages
+        uses: actions/download-artifact@v8
+        with:
+          name: nuget-packages
+          path: ./artifacts/nuget
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: NuGet login (OIDC)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
 
       - name: Publish NuGet packages
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: dotnet nuget push "./artifacts/nuget/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: Unlist older prerelease packages
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: |
           set -euo pipefail
-          release_version="${{ steps.release-version.outputs.version }}"
+          release_version="${{ needs.release.outputs.version }}"
           python3 - "$release_version" <<'PY' > prerelease-versions-to-unlist.txt
           import json
           import sys
+          import urllib.error
           import urllib.request
 
           release = tuple(int(part) for part in sys.argv[1].split("."))
-          packages = ("NT.Blazor.ErrorBoundary", "NT.Blazor.ErrorBoundary.AspNetCore")
+          packages = ("NT.Blazor.ErrorBoundary", "NT.Blazor.ErrorBoundary.AspNetCore", "NT.Blazor.ErrorBoundary.AzureMonitor")
 
           def prerelease_is_lower(version):
               version_without_build = version.split("+", 1)[0]
@@ -131,8 +186,14 @@ jobs:
 
           for package in packages:
               url = f"https://api.nuget.org/v3-flatcontainer/{package.lower()}/index.json"
-              with urllib.request.urlopen(url) as response:
-                  versions = json.load(response)["versions"]
+              # A package's first release has no published versions yet.
+              try:
+                  with urllib.request.urlopen(url) as response:
+                      versions = json.load(response)["versions"]
+              except urllib.error.HTTPError as error:
+                  if error.code == 404:
+                      continue
+                  raise
               for version in versions:
                   if prerelease_is_lower(version):
                       print(f"{package} {version}")

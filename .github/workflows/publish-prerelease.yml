@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# Runs one at a time so two quick pushes cannot race the forced preview branch push and semantic-release.
+concurrency:
+  group: publish-prerelease
+  cancel-in-progress: false
+
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   DOTNET_NOLOGO: true
@@ -24,6 +29,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v6
         with:
+          dotnet-version: 10.0.x
           global-json-file: global.json
 
       - name: Restore
@@ -32,17 +38,39 @@ jobs:
       - name: Build
         run: dotnet build ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-restore
 
+      - name: Install Playwright browsers
+        run: pwsh ./Tests/NT.Blazor.ErrorBoundary.EndToEnd.Tests/bin/Release/net11.0/playwright.ps1 install --with-deps chromium
+
       - name: Test
+        env:
+          NT_E2E_REQUIRED: true
         run: dotnet test --solution ./NT.Blazor.ErrorBoundary.slnx --configuration Release --no-build --no-restore
 
-  publish-prerelease:
+  # Fails the run before anything is tagged when the trusted publishing policy or NUGET_USER is missing.
+  # Only this job and publish can request an OIDC token, and neither runs npm or repository code.
+  nuget-login-check:
     needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+
+    steps:
+      - name: NuGet login (OIDC)
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+  release:
+    needs: nuget-login-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
       issues: write
       pull-requests: write
+    outputs:
+      version: ${{ steps.release-version.outputs.version }}
 
     steps:
       - name: Check out repository
@@ -64,6 +92,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v6
         with:
+          dotnet-version: 10.0.x
           global-json-file: global.json
 
       - name: Set up Node.js
@@ -110,16 +139,6 @@ jobs:
           fi
           echo "version=${release_tag#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Validate NuGet API key
-        if: steps.release-version.outputs.version != ''
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          if [ -z "$NUGET_API_KEY" ]; then
-            echo "NUGET_API_KEY secret is missing or unavailable to this workflow."
-            exit 1
-          fi
-
       - name: Pack NuGet packages
         if: steps.release-version.outputs.version != ''
         run: |
@@ -127,10 +146,45 @@ jobs:
           mkdir -p ./artifacts/nuget
           dotnet pack ./NT.Blazor.ErrorBoundary/NT.Blazor.ErrorBoundary.csproj --configuration Release --no-build --no-restore --output ./artifacts/nuget -p:PackageVersion=${{ steps.release-version.outputs.version }}
           dotnet pack ./NT.Blazor.ErrorBoundary.AspNetCore/NT.Blazor.ErrorBoundary.AspNetCore.csproj --configuration Release --no-build --no-restore --output ./artifacts/nuget -p:PackageVersion=${{ steps.release-version.outputs.version }}
+          dotnet pack ./NT.Blazor.ErrorBoundary.AzureMonitor/NT.Blazor.ErrorBoundary.AzureMonitor.csproj --configuration Release --no-build --no-restore --output ./artifacts/nuget -p:PackageVersion=${{ steps.release-version.outputs.version }}
           unzip -p "./artifacts/nuget/NT.Blazor.ErrorBoundary.${{ steps.release-version.outputs.version }}.nupkg" staticwebassets/nt-blazor-error-boundary.js > /dev/null
 
-      - name: Publish NuGet packages
+      - name: Upload NuGet packages
         if: steps.release-version.outputs.version != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-packages
+          path: ./artifacts/nuget/*.*nupkg
+          if-no-files-found: error
+
+  # Re-running this job alone republishes the same packages; --skip-duplicate makes that safe.
+  publish:
+    needs: release
+    if: needs.release.outputs.version != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download NuGet packages
+        uses: actions/download-artifact@v8
+        with:
+          name: nuget-packages
+          path: ./artifacts/nuget
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: NuGet login (OIDC)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Publish NuGet packages
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: dotnet nuget push "./artifacts/nuget/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
