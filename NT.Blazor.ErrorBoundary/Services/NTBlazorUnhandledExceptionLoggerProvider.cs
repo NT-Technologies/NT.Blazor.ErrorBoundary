@@ -20,14 +20,22 @@ internal sealed class NTBlazorUnhandledExceptionLoggerProvider(IServiceProvider 
         }
 
         _isReporting = true;
+        // A scope of its own, because this provider holds the root provider, and WebAssemblyHostBuilder validates scopes in Development,
+        // where a scoped reporter would not resolve from the root. The scope lives until the report finishes sending.
+        var scope = _services.CreateScope();
         try {
-            _services.GetService<INTBlazorErrorReporter>()?.ReportAsync(exception, new NTBlazorErrorBoundaryContext {
+            var report = scope.ServiceProvider.GetService<INTBlazorErrorReporter>()?.ReportAsync(exception, new NTBlazorErrorBoundaryContext {
                 BoundaryName = category,
                 ReferenceId = NTBlazorErrorReference.Create()
-            }).ContinueWith(static task => _ = task.Exception, TaskContinuationOptions.OnlyOnFaulted);
+            }) ?? Task.CompletedTask;
+            report.ContinueWith(static (task, state) => {
+                _ = task.Exception;
+                ((IDisposable)state!).Dispose();
+            }, scope, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
         catch {
             // Reporting must never throw back into the logging pipeline.
+            scope.Dispose();
         }
         finally {
             _isReporting = false;

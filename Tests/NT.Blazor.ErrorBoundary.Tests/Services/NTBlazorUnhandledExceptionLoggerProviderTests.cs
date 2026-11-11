@@ -71,6 +71,18 @@ public sealed class NTBlazorUnhandledExceptionLoggerProviderTests {
         Assert.Null(exception);
     }
 
+    // WebAssemblyHostBuilder validates scopes in Development, where resolving a scoped service from the root provider throws.
+    [Fact]
+    public void Log_WhenReporterIsScopedAndScopesAreValidated_ReportsException() {
+        var services = new ServiceCollection().AddScoped<INTBlazorErrorReporter>(_ => _reporter).BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var provider = new NTBlazorUnhandledExceptionLoggerProvider(services, Options.Create(_options));
+        var exception = new InvalidOperationException("unhandled");
+
+        provider.CreateLogger(RendererCategory).LogError(exception, "failure");
+
+        Assert.Same(exception, _reporter.Exception);
+    }
+
     private ILogger CreateLogger(string category) {
         var services = new ServiceCollection().AddSingleton<INTBlazorErrorReporter>(_reporter).BuildServiceProvider();
         return new NTBlazorUnhandledExceptionLoggerProvider(services, Options.Create(_options)).CreateLogger(category);
