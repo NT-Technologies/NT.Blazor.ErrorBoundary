@@ -19,9 +19,9 @@ public sealed class MetricsAndCircuitTests {
 
         var measurement = Assert.Single(recorder.Measurements);
         Assert.Equal(1, measurement.Value);
-        Assert.Equal("server", measurement.Tags["source"]);
-        Assert.Equal(NTBlazorReportKinds.Exception, measurement.Tags["report_kind"]);
-        Assert.Equal("Boundary", measurement.Tags["boundary"]);
+        Assert.Equal("server", measurement.Tags["blazor.error.source"]);
+        Assert.Equal(NTBlazorReportKinds.Exception, measurement.Tags["blazor.report.kind"]);
+        Assert.Equal("Boundary", measurement.Tags["blazor.boundary.name"]);
     }
 
     [Fact]
@@ -32,9 +32,9 @@ public sealed class MetricsAndCircuitTests {
         NTBlazorErrorBoundaryAspNetCoreExtensions.HandleClientReport(new TestLoggerProvider().CreateLogger("test"), report, CreateHttpContext(), Options());
 
         var measurement = Assert.Single(recorder.Measurements);
-        Assert.Equal("client", measurement.Tags["source"]);
-        Assert.Equal(NTBlazorReportKinds.JavaScriptError, measurement.Tags["report_kind"]);
-        Assert.DoesNotContain("boundary", measurement.Tags.Keys);
+        Assert.Equal("client", measurement.Tags["blazor.error.source"]);
+        Assert.Equal(NTBlazorReportKinds.JavaScriptError, measurement.Tags["blazor.report.kind"]);
+        Assert.DoesNotContain("blazor.boundary.name", measurement.Tags.Keys);
     }
 
     [Fact]
@@ -65,8 +65,8 @@ public sealed class MetricsAndCircuitTests {
         await reporter.ReportAsync(new InvalidOperationException("x"), new NTBlazorErrorBoundaryContext { ReferenceId = "ref-9", Uri = "https://example.test/a?token=secret#frag" }, TestContext.Current.CancellationToken);
 
         var entry = Assert.Single(logs.Entries);
-        Assert.Equal("https://example.test/a", entry.ScopeValues["BlazorUri"]);
-        Assert.Equal("ref-9", entry.ScopeValues["BlazorErrorReferenceId"]);
+        Assert.Equal("https://example.test/a", entry.Values["url.full"]);
+        Assert.Equal("ref-9", entry.Values["blazor.error.reference_id"]);
     }
 
     [Fact]
@@ -78,32 +78,67 @@ public sealed class MetricsAndCircuitTests {
 
         var entry = Assert.Single(logs.Entries);
         Assert.Same(exception, entry.Exception);
-        Assert.Equal("redacted", entry.ScopeValues["BlazorBoundaryName"]);
+        Assert.Equal("redacted", entry.Values["blazor.boundary.name"]);
     }
 
     [Fact]
-    public async Task CircuitHandler_StoresIdLogsEventsAndFeedsReporterScope() {
-        var logs = new TestLoggerProvider();
-        using var loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(logs));
-        var circuit = new NTBlazorCircuitContext();
-        var handler = new NTBlazorCircuitDiagnosticsHandler(loggerFactory.CreateLogger<NTBlazorCircuitDiagnosticsHandler>(), circuit);
+    public async Task ThrowingFilter_DoesNotIncrementCounter() {
+        using var recorder = new CounterRecorder();
+        var (reporter, _) = CreateReporter(options => options.FilterReport = _ => throw new InvalidOperationException("filter bug"));
 
-        handler.Log("circuit-1", LogLevel.Information, "Blazor circuit {BlazorCircuitId} opened");
-        handler.Log("circuit-1", LogLevel.Warning, "Blazor circuit {BlazorCircuitId} connection down");
-
-        Assert.Equal("circuit-1", circuit.CircuitId);
-        Assert.Collection(
-            logs.Entries,
-            opened => {
-                Assert.Equal(LogLevel.Information, opened.LogLevel);
-                Assert.Equal("circuit-1", opened.ScopeValues["BlazorCircuitId"]);
-                Assert.Contains("circuit-1", opened.Message, StringComparison.Ordinal);
-            },
-            down => Assert.Equal(LogLevel.Warning, down.LogLevel));
-
-        var reporter = new NTBlazorServerErrorReporter(loggerFactory.CreateLogger<NTBlazorServerErrorReporter>(), Microsoft.Extensions.Options.Options.Create(Options()), circuit);
         await reporter.ReportAsync(new InvalidOperationException("x"), new NTBlazorErrorBoundaryContext(), TestContext.Current.CancellationToken);
-        Assert.Equal("circuit-1", logs.Entries[^1].ScopeValues["BlazorCircuitId"]);
+
+        Assert.Empty(recorder.Measurements);
+    }
+
+    [Fact]
+    public void ConnectionUp_LogsInformationEventWithCircuitId() {
+        var (handler, _, logs) = CreateHandler();
+
+        handler.OnConnectionChanged("circuit-1", isUp: true);
+
+        var entry = Assert.Single(logs.Entries);
+        Assert.Equal(LogLevel.Information, entry.LogLevel);
+        Assert.Equal("blazor.circuit.connection_up", entry.EventId.Name);
+        Assert.Equal("blazor.circuit.connection_up", entry.Values["microsoft.custom_event.name"]);
+        Assert.Equal("circuit-1", entry.Values["aspnetcore.components.circuit.id"]);
+        Assert.Equal("Blazor circuit circuit-1 connection up", entry.Message);
+    }
+
+    [Fact]
+    public void ConnectionDown_LogsWarningEventWithCircuitId() {
+        var (handler, _, logs) = CreateHandler();
+
+        handler.OnConnectionChanged("circuit-1", isUp: false);
+
+        var entry = Assert.Single(logs.Entries);
+        Assert.Equal(LogLevel.Warning, entry.LogLevel);
+        Assert.Equal("blazor.circuit.connection_down", entry.EventId.Name);
+        Assert.Equal("blazor.circuit.connection_down", entry.Values["microsoft.custom_event.name"]);
+        Assert.Equal("circuit-1", entry.Values["aspnetcore.components.circuit.id"]);
+        Assert.Equal("Blazor circuit circuit-1 connection down", entry.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ConnectionChange_StoresCircuitIdInContext(bool isUp) {
+        var (handler, context, _) = CreateHandler();
+
+        handler.OnConnectionChanged("circuit-1", isUp);
+
+        Assert.Equal("circuit-1", context.CircuitId);
+    }
+
+    [Fact]
+    public async Task ServerReport_AfterConnectionChange_CarriesCircuitId() {
+        var (handler, context, logs) = CreateHandler();
+        handler.OnConnectionChanged("circuit-1", isUp: true);
+        var reporter = new NTBlazorServerErrorReporter(LoggerFactory.Create(builder => builder.AddProvider(logs)).CreateLogger<NTBlazorServerErrorReporter>(), Microsoft.Extensions.Options.Options.Create(Options()), context);
+
+        await reporter.ReportAsync(new InvalidOperationException("x"), new NTBlazorErrorBoundaryContext(), TestContext.Current.CancellationToken);
+
+        Assert.Equal("circuit-1", logs.Entries.Single(entry => entry.LogLevel == LogLevel.Error).Values["aspnetcore.components.circuit.id"]);
     }
 
     [Fact]
@@ -131,6 +166,13 @@ public sealed class MetricsAndCircuitTests {
         Assert.Equal("/api/errors", provider.GetRequiredService<IOptions<NTBlazorErrorBoundaryHttpClientOptions>>().Value.ReportUri);
     }
 
+    private static (NTBlazorCircuitDiagnosticsHandler Handler, NTBlazorCircuitContext Context, TestLoggerProvider Logs) CreateHandler() {
+        var logs = new TestLoggerProvider();
+        var context = new NTBlazorCircuitContext();
+        var loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddProvider(logs));
+        return (new NTBlazorCircuitDiagnosticsHandler(loggerFactory.CreateLogger<NTBlazorCircuitDiagnosticsHandler>(), context), context, logs);
+    }
+
     private static NTBlazorErrorBoundaryHttpClientOptions Options() => new() { ReportUri = "/api/errors" };
 
     private static DefaultHttpContext CreateHttpContext() => new() { RequestServices = new ServiceCollection().BuildServiceProvider() };
@@ -153,7 +195,7 @@ public sealed class MetricsAndCircuitTests {
 
         public CounterRecorder() {
             _listener.InstrumentPublished = (instrument, listener) => {
-                if (instrument.Meter.Name == NTBlazorErrorBoundaryAspNetCoreExtensions.MeterName && instrument.Name == NTBlazorErrorBoundaryMetrics.ErrorsCounterName) {
+                if (instrument.Meter.Name == NTBlazorErrorBoundaryAspNetCoreExtensions.MeterName && instrument.Name == NTBlazorErrorBoundaryTelemetry.ErrorsCounterName) {
                     listener.EnableMeasurementEvents(instrument);
                 }
             };

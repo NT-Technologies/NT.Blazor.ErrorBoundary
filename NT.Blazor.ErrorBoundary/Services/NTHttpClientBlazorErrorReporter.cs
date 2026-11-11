@@ -3,11 +3,16 @@ using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 using NT.Blazor.ErrorBoundary.Models;
 using System.Net;
-using System.Net.Http.Json;
+using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace NT.Blazor.ErrorBoundary.Services;
 
 internal sealed class NTHttpClientBlazorErrorReporter : INTBlazorErrorReporter {
+    // Browsers refuse keepalive requests with larger bodies, so a larger report is sent without it.
+    internal const int MaxKeepaliveBytes = 64_000;
+    // The fetch options the WebAssembly HttpClient handler passes to the browser; other handlers ignore them.
+    internal static readonly HttpRequestOptionsKey<IDictionary<string, object>> FetchOptions = new("WebAssemblyFetchOptions");
 
     private readonly Func<NTBlazorErrorReport, NTBlazorErrorReport?>? _filterReport;
     private readonly HttpClient _httpClient;
@@ -50,9 +55,15 @@ internal sealed class NTHttpClientBlazorErrorReporter : INTBlazorErrorReporter {
     // Returns false only when the report should be retried later from the browser queue.
     private async Task<bool> TryPostAsync(NTBlazorErrorReport report, CancellationToken cancellationToken) {
         try {
+            var body = JsonSerializer.SerializeToUtf8Bytes(report, JsonSerializerOptions.Web);
             using var request = new HttpRequestMessage(HttpMethod.Post, _reportUri) {
-                Content = JsonContent.Create(report)
+                Content = new ByteArrayContent(body) { Headers = { ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" } } }
             };
+            // keepalive lets the browser finish the upload when the page navigates away; the report is then neither lost nor queued again.
+            if (body.Length <= MaxKeepaliveBytes) {
+                request.Options.Set(FetchOptions, new Dictionary<string, object>(StringComparer.Ordinal) { ["keepalive"] = true });
+            }
+
             if (!string.IsNullOrEmpty(report.TraceParent)) {
                 request.Headers.TryAddWithoutValidation("traceparent", report.TraceParent);
             }

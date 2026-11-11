@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using NT.Blazor.ErrorBoundary.Components;
 using NT.Blazor.ErrorBoundary.Services;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace NT.Blazor.ErrorBoundary.Tests.Components;
 
@@ -13,13 +14,13 @@ public sealed class NTBlazorErrorBoundaryScriptTests : BunitContext {
     }
 
     [Fact]
-    public void Render_EmitsScriptWithReportUriOnly() {
+    public void Render_EmitsScriptWithReportUriAndServerVersionOnly() {
         var cut = Render<NTBlazorErrorBoundaryScript>();
 
         var script = cut.Find("script");
         Assert.Equal("_content/NT.Blazor.ErrorBoundary/nt-blazor-error-boundary.js", script.GetAttribute("src"));
         Assert.Equal("/api/errors", script.GetAttribute("data-report-uri"));
-        Assert.False(script.HasAttribute("data-application-version"));
+        Assert.Equal(typeof(NTBlazorErrorBoundaryScriptTests).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion, script.GetAttribute("data-application-version"));
         Assert.False(script.HasAttribute("data-stall-timeout-ms"));
         Assert.False(script.HasAttribute("data-traceparent"));
     }
@@ -27,11 +28,9 @@ public sealed class NTBlazorErrorBoundaryScriptTests : BunitContext {
     [Fact]
     public void Render_WhenParametersSet_EmitsAttributes() {
         var cut = Render<NTBlazorErrorBoundaryScript>(parameters => parameters
-            .Add(p => p.ApplicationVersion, "4.13.0")
             .Add(p => p.StallTimeoutMs, 7000));
 
         var script = cut.Find("script");
-        Assert.Equal("4.13.0", script.GetAttribute("data-application-version"));
         Assert.Equal("7000", script.GetAttribute("data-stall-timeout-ms"));
     }
 

@@ -76,13 +76,15 @@ public sealed class E2EFixture : IAsyncLifetime {
         }
         while (await WaitAsync(timer, timeout.Token));
 
-        var captured = string.Join(" | ", _logs.Entries.Where(IsInteresting).Select(e => $"[{e.Category}] {e.Message} ref={e.ScopeText("BlazorErrorReferenceId")} kind={e.ScopeText("BlazorReportKind")}"));
+        var captured = string.Join(" | ", _logs.Entries.Where(IsInteresting).Select(e => $"[{e.Category}] {e.Message} ref={e.FieldText("blazor.error.reference_id")} kind={e.FieldText("blazor.report.kind")}"));
         throw new TimeoutException($"No server log matched: {description}. Captured: {captured}");
     }
 
     internal bool Exists(Func<CapturedLog, bool> predicate) => _logs.Entries.Any(predicate);
 
-    private static bool IsInteresting(CapturedLog entry) => entry.Level >= LogLevel.Error || entry.Scope.ContainsKey("BlazorErrorReferenceId");
+    internal int Count(Func<CapturedLog, bool> predicate) => _logs.Entries.Count(predicate);
+
+    private static bool IsInteresting(CapturedLog entry) => entry.Level >= LogLevel.Error || entry.Fields.ContainsKey("blazor.error.reference_id");
 
     private static async Task<bool> WaitAsync(PeriodicTimer timer, CancellationToken cancellationToken) {
         try {

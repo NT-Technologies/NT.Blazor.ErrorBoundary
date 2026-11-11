@@ -78,9 +78,13 @@
     const breadcrumbKey = 'nt.blazor.error-boundary.breadcrumbs';
     const navigationKey = 'nt.blazor.error-boundary.navigation';
     const queueKey = 'nt.blazor.error-boundary.queue';
+    const sentKey = 'nt.blazor.error-boundary.sent';
     const sessionKey = 'nt.blazor.error-boundary.session';
     const maxBreadcrumbs = 20;
     const maxQueuedReports = 20;
+    const maxSentReferences = 10;
+    const maxKeepaliveBytes = 64000;
+    const inFlight = new Set<string>();
     const duplicateWindowMs = 5000;
     const referenceAlphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
     const reconnectModalId = 'components-reconnect-modal';
@@ -330,11 +334,13 @@
         }
 
         try {
+            const body = JSON.stringify(report);
             const response = await fetch(reportEndpoint, {
-                body: JSON.stringify(report),
+                body,
                 credentials: 'same-origin',
                 headers,
-                keepalive,
+                // Browsers reject keepalive requests with larger bodies; without this a large queued report would fail on every retry.
+                keepalive: keepalive && new TextEncoder().encode(body).length <= maxKeepaliveBytes,
                 method: 'POST',
             });
             return response.ok || (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429);
@@ -344,9 +350,45 @@
         }
     }
 
+    // Stored lists come from earlier pages and older script versions; anything that is not a list of the expected items is ignored rather than trusted.
+    function readList<T>(key: string, isItem: (value: unknown) => value is T): T[] {
+        const list = readJson<unknown>(key, []);
+        return Array.isArray(list) ? list.filter(isItem) : [];
+    }
+
+    // The last few reference IDs known to be delivered, kept across navigations. When the page navigates during an upload, the browser still completes
+    // the keepalive request, but the page sees it fail after pagehide; without this record the report would be queued and resent by the next page.
+    function readSent(): string[] {
+        return readList(sentKey, (value): value is string => typeof value === 'string');
+    }
+
+    function markSent(referenceIds: string[]): void {
+        if (referenceIds.length > 0) {
+            writeJson(sentKey, [...readSent().filter(id => !referenceIds.includes(id)), ...referenceIds].slice(-maxSentReferences));
+        }
+    }
+
+    function wasSent(report: ErrorReport): boolean {
+        return readSent().includes(report.referenceId as string);
+    }
+
+    // Returns true when the report needs no retry: delivered, permanently rejected, or still in flight when the page hid.
+    async function send(report: ErrorReport): Promise<boolean> {
+        // Reports queued by an older script version have no reference ID; give them one so delivery can be recorded.
+        const referenceId = report.referenceId ||= createReferenceId();
+        inFlight.add(referenceId);
+        const delivered = await tryPost(report, true);
+        inFlight.delete(referenceId);
+        if (delivered) {
+            markSent([referenceId]);
+        }
+
+        return delivered || wasSent(report);
+    }
+
     async function submitReport(report: ErrorReport): Promise<boolean> {
         const enriched = enrichReport(report);
-        if (shouldReport(enriched) && !await tryPost(enriched, true)) {
+        if (shouldReport(enriched) && !await send(enriched)) {
             writeQueue([...readQueue(), enriched]);
         }
 
@@ -355,57 +397,50 @@
 
     function queueReport(report: ErrorReport): void {
         const enriched = enrichReport(report);
-        if (shouldReport(enriched)) {
+        if (shouldReport(enriched) && !wasSent(enriched)) {
             writeQueue([...readQueue(), enriched]);
         }
     }
 
     function readQueue(): ErrorReport[] {
-        const queue = readJson<ErrorReport[]>(queueKey, []);
-        return Array.isArray(queue) ? queue : [];
+        return readList(queueKey, (value): value is ErrorReport => typeof value === 'object' && value !== null);
     }
 
     function writeQueue(reports: ErrorReport[]): void {
         writeJson(queueKey, reports.slice(-maxQueuedReports));
     }
 
+    // Claims one queued report at a time, so reports not yet sent stay queued for the page-hide beacon or the next page if the page goes mid-flush.
+    // Each claim is a synchronous read and write, so concurrent flushes and submissions never take the same report.
     async function flushQueue(): Promise<void> {
-        const queue = readQueue();
-        if (queue.length === 0) {
-            return;
-        }
-
-        // Take ownership of the queued reports so concurrent submissions and flushes are neither overwritten nor resent.
-        writeQueue([]);
-        const failed = [];
-        for (const report of queue) {
-            if (!await tryPost(report, true)) {
-                failed.push(report);
+        for (let remaining = readQueue().length; remaining > 0; remaining--) {
+            const [report, ...rest] = readQueue();
+            if (!report) {
+                return;
             }
-        }
-        if (failed.length > 0) {
-            writeQueue([...failed, ...readQueue()]);
+
+            writeQueue(rest);
+            if (!wasSent(report) && !await send(report)) {
+                writeQueue([...readQueue(), report]);
+            }
         }
     }
 
-    function flushQueueWithBeacon(): void {
+    // Uploads still in flight are completed by the browser after the page goes, so they count as delivered from here on.
+    // A page entering the back-forward cache is not gone: it may be restored, and its uploads then settle normally, so they are not recorded.
+    // Beaconed reports leave the queue and are not recorded, so they cannot push those in-flight references out of the short record.
+    function handlePageHide(event: PageTransitionEvent): void {
+        if (!event.persisted) {
+            markSent([...inFlight]);
+        }
+
         if (!navigator.sendBeacon) {
             return;
         }
 
-        const queue = readQueue();
-        if (queue.length === 0) {
-            return;
-        }
-
-        const remaining = [];
-        for (const report of queue) {
-            const body = new Blob([JSON.stringify(report)], { type: 'application/json' });
-            if (!navigator.sendBeacon(reportEndpoint, body)) {
-                remaining.push(report);
-            }
-        }
-        writeQueue(remaining);
+        const sent = readSent();
+        writeQueue(readQueue().filter(report => !sent.includes(report.referenceId as string)
+            && !navigator.sendBeacon(reportEndpoint, new Blob([JSON.stringify(report)], { type: 'application/json' }))));
     }
 
     function shouldReport(report: ErrorReport): boolean {
@@ -562,7 +597,7 @@
     });
 
     window.addEventListener('online', () => void flushQueue());
-    window.addEventListener('pagehide', flushQueueWithBeacon);
+    window.addEventListener('pagehide', handlePageHide);
 
     function attachBlazorEvents(): void {
         if (!browser.Blazor?.addEventListener) {

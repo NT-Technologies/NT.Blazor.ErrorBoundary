@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- Differs from the server's version so reports show which side raised them. -->
+    <Version>2.0.0-client</Version>
   </PropertyGroup>
 
   <ItemGroup>

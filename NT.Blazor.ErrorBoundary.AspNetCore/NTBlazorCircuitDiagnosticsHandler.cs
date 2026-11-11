@@ -3,32 +3,31 @@ using Microsoft.Extensions.Logging;
 
 namespace NT.Blazor.ErrorBoundary.AspNetCore;
 
-internal sealed class NTBlazorCircuitDiagnosticsHandler(ILogger<NTBlazorCircuitDiagnosticsHandler> _logger, NTBlazorCircuitContext _context) : CircuitHandler {
+internal sealed class NTBlazorCircuitDiagnosticsHandler(ILogger<NTBlazorCircuitDiagnosticsHandler> _logger, NTBlazorCircuitContext _context, INTBlazorErrorBoundaryExporter? _exporter = null) : CircuitHandler {
+    // Opens and closes are not logged: they are high-volume, and ASP.NET Core's circuit metrics already count them.
+    // The ID is still recorded so server-rendered error logs carry it.
     public override Task OnCircuitOpenedAsync(Circuit circuit, CancellationToken cancellationToken) {
-        Log(circuit.Id, LogLevel.Information, "Blazor circuit {BlazorCircuitId} opened");
-        return Task.CompletedTask;
-    }
-
-    public override Task OnCircuitClosedAsync(Circuit circuit, CancellationToken cancellationToken) {
-        Log(circuit.Id, LogLevel.Information, "Blazor circuit {BlazorCircuitId} closed");
+        _context.CircuitId = circuit.Id;
         return Task.CompletedTask;
     }
 
     public override Task OnConnectionDownAsync(Circuit circuit, CancellationToken cancellationToken) {
-        Log(circuit.Id, LogLevel.Warning, "Blazor circuit {BlazorCircuitId} connection down");
+        OnConnectionChanged(circuit.Id, isUp: false);
         return Task.CompletedTask;
     }
 
     public override Task OnConnectionUpAsync(Circuit circuit, CancellationToken cancellationToken) {
-        Log(circuit.Id, LogLevel.Information, "Blazor circuit {BlazorCircuitId} connection up");
+        OnConnectionChanged(circuit.Id, isUp: true);
         return Task.CompletedTask;
     }
 
-    // Circuit has no public constructor, so the logic takes the id and tests call it directly.
-    internal void Log(string circuitId, LogLevel level, string message) {
+    // Circuit has no public constructor, so the overrides pass only its ID and tests call this directly.
+    internal void OnConnectionChanged(string circuitId, bool isUp) {
         _context.CircuitId = circuitId;
-        using (_logger.BeginScope(new Dictionary<string, object?>(StringComparer.Ordinal) { ["BlazorCircuitId"] = circuitId })) {
-            _logger.Log(level, message, circuitId);
-        }
+        // ASP.NET Core's own circuit ID attribute name, so these events line up with its built-in circuit telemetry.
+        var fields = new Dictionary<string, object?>(StringComparer.Ordinal) { ["aspnetcore.components.circuit.id"] = circuitId };
+        var eventId = isUp ? NTBlazorLog.CircuitConnectionUp : NTBlazorLog.CircuitConnectionDown;
+        NTBlazorLog.WriteEvent(_logger, isUp ? LogLevel.Information : LogLevel.Warning, eventId, fields, isUp ? "Blazor circuit {aspnetcore.components.circuit.id} connection up" : "Blazor circuit {aspnetcore.components.circuit.id} connection down");
+        NTBlazorLog.Export(_logger, _exporter, target => target.ExportEvent(eventId.Name!, DateTimeOffset.UtcNow, fields));
     }
 }

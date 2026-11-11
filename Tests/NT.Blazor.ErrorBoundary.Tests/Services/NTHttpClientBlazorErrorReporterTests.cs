@@ -4,6 +4,7 @@ using Microsoft.JSInterop;
 using NT.Blazor.ErrorBoundary.Models;
 using NT.Blazor.ErrorBoundary.Services;
 using System.Net;
+using System.Reflection;
 using System.Text.Json;
 
 namespace NT.Blazor.ErrorBoundary.Tests.Services;
@@ -74,7 +75,6 @@ public sealed class NTHttpClientBlazorErrorReporterTests {
 
         Assert.Null(jsRuntime.QueuedReport);
         var report = ReadReport(handler);
-        Assert.Equal("4.13.0", report.ApplicationVersion);
         Assert.Equal("Claims.Management", report.BoundaryName);
         Assert.Equal("7F3K2QAB", report.ReferenceId);
         Assert.Equal("navigation-123", report.NavigationId);
@@ -189,6 +189,54 @@ public sealed class NTHttpClientBlazorErrorReporterTests {
         Assert.Contains("report field truncated", report.ExceptionMessage, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task ReportAsync_ReportWithinKeepaliveLimit_AsksBrowserToKeepUploadAlive() {
+        var handler = new CapturingHandler(HttpStatusCode.NoContent);
+
+        await CreateReporter(handler).ReportAsync(new InvalidOperationException("client failure"), new NTBlazorErrorBoundaryContext(), TestContext.Current.CancellationToken);
+
+        Assert.True(handler.Request!.Options.TryGetValue(NTHttpClientBlazorErrorReporter.FetchOptions, out var fetchOptions));
+        Assert.Equal(true, fetchOptions["keepalive"]);
+        Assert.Equal("application/json", handler.ContentType);
+        Assert.Equal("client failure", JsonDocument.Parse(handler.Content!).RootElement.GetProperty("exceptionMessage").GetString());
+    }
+
+    [Fact]
+    public async Task ReportAsync_ReportBeyondKeepaliveLimit_IsSentWithoutKeepalive() {
+        var handler = new CapturingHandler(HttpStatusCode.NoContent);
+        var message = new string('x', NTHttpClientBlazorErrorReporter.MaxKeepaliveBytes);
+
+        await CreateReporter(handler, maxReportFieldLength: message.Length).ReportAsync(new InvalidOperationException(message), new NTBlazorErrorBoundaryContext(), TestContext.Current.CancellationToken);
+
+        Assert.False(handler.Request!.Options.TryGetValue(NTHttpClientBlazorErrorReporter.FetchOptions, out _));
+        Assert.Equal(message, ReadReport(handler).ExceptionMessage);
+    }
+
+    [Fact]
+    public async Task ReportAsync_FilterReturningRedactedCopy_PostsRedactedFieldsAndKeepsTheRest() {
+        var handler = new CapturingHandler(HttpStatusCode.NoContent);
+        var reporter = CreateReporter(handler, filterReport: report => report with { ExceptionMessage = "[redacted]", ExceptionDetails = null });
+
+        await reporter.ReportAsync(new InvalidOperationException("card 4111 1111 1111 1111"), new NTBlazorErrorBoundaryContext { BoundaryName = "Checkout", ReferenceId = "7F3K2QAB" }, TestContext.Current.CancellationToken);
+
+        var report = ReadReport(handler);
+        Assert.Equal("[redacted]", report.ExceptionMessage);
+        Assert.Null(report.ExceptionDetails);
+        Assert.Equal("Checkout", report.BoundaryName);
+        Assert.Equal("7F3K2QAB", report.ReferenceId);
+        Assert.Equal(typeof(InvalidOperationException).FullName, report.ExceptionType);
+    }
+
+    [Fact]
+    public async Task ReportAsync_PostsOwnAppVersionInsteadOfPageVersion() {
+        var handler = new CapturingHandler(HttpStatusCode.NoContent);
+        var jsRuntime = new CapturingJsRuntime(new NTBlazorClientContext { ApplicationVersion = "1.4.0+server" });
+
+        await CreateReporter(handler, jsRuntime: jsRuntime).ReportAsync(new InvalidOperationException("client failure"), new NTBlazorErrorBoundaryContext(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(typeof(NTHttpClientBlazorErrorReporterTests).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion, ReadReport(handler).ApplicationVersion);
+    }
+
     private static NTBlazorErrorReport ReadReport(CapturingHandler handler) {
         var report = JsonSerializer.Deserialize<NTBlazorErrorReport>(handler.Content!, new JsonSerializerOptions {
             PropertyNameCaseInsensitive = true
@@ -238,6 +286,8 @@ public sealed class NTHttpClientBlazorErrorReporterTests {
     private sealed class CapturingHandler(HttpStatusCode statusCode, Exception? failure = null) : HttpMessageHandler {
         public string? Content { get; private set; }
 
+        public string? ContentType { get; private set; }
+
         public HttpRequestMessage? Request { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
@@ -247,6 +297,7 @@ public sealed class NTHttpClientBlazorErrorReporterTests {
             }
 
             Content = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+            ContentType = request.Content?.Headers.ContentType?.MediaType;
 
             return new HttpResponseMessage(statusCode);
         }

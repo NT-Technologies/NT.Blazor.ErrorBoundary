@@ -19,6 +19,8 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "Microsoft.Extensions.*"
         update-types: ["version-update:semver-major"]
+      # OpenTelemetry API packages are a library dependency floor; raise them only for a security fix or a needed API.
+      - dependency-name: "OpenTelemetry.Api*"
     groups:
       nuget-minor-and-patch:
         patterns:

@@ -34,5 +34,5 @@ public abstract class E2ETestBase(E2EFixture _fixture) : IAsyncLifetime {
         return (await Reference.TextContentAsync())!;
     }
 
-    internal Task<CapturedLog> WaitForReferenceLogAsync(string reference) => _fixture.WaitForLogAsync(e => e.ScopeText("BlazorErrorReferenceId") == reference, "reference " + reference);
+    internal Task<CapturedLog> WaitForReferenceLogAsync(string reference) => _fixture.WaitForLogAsync(e => e.FieldText("blazor.error.reference_id") == reference, "reference " + reference);
 }

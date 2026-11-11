@@ -12,7 +12,7 @@ public sealed class ErrorBoundaryTests(E2EFixture fixture) : E2ETestBase(fixture
         var reference = await ReadReferenceAsync();
 
         var log = await WaitForReferenceLogAsync(reference);
-        Assert.Equal("SsrBoundary", log.ScopeText("BlazorBoundaryName"));
+        Assert.Equal("SsrBoundary", log.FieldText("blazor.boundary.name"));
         Assert.Contains("ssr boom", log.Exception?.ToString());
     }
 
@@ -24,7 +24,7 @@ public sealed class ErrorBoundaryTests(E2EFixture fixture) : E2ETestBase(fixture
         var reference = await ReadReferenceAsync();
 
         var log = await WaitForReferenceLogAsync(reference);
-        Assert.Equal("ServerBoundary", log.ScopeText("BlazorBoundaryName"));
+        Assert.Equal("ServerBoundary", log.FieldText("blazor.boundary.name"));
         Assert.Contains("server boom", log.Exception?.ToString());
     }
 
@@ -38,7 +38,18 @@ public sealed class ErrorBoundaryTests(E2EFixture fixture) : E2ETestBase(fixture
         var log = await WaitForReferenceLogAsync(reference);
         Assert.Equal("NT.Blazor.ErrorBoundary.ClientReport", log.Category);
         Assert.StartsWith("Blazor client report", log.Message);
-        Assert.Equal("WasmBoundary", log.ScopeText("BlazorBoundaryName"));
+        Assert.Equal("WasmBoundary", log.FieldText("blazor.boundary.name"));
+    }
+
+    [Fact]
+    public async Task WebAssemblyComponentThrows_ReportCarriesClientProjectVersion() {
+        await OpenAsync("/wasm-error");
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Explode" }).ClickAsync();
+
+        // The sample's WebAssembly project sets its own <Version>; the server's differs, so this proves the version is read inside the browser's runtime.
+        var log = await WaitForReferenceLogAsync(await ReadReferenceAsync());
+        Assert.StartsWith("2.0.0-client", log.FieldText("blazor.app.version"));
     }
 
     [Fact]
@@ -46,7 +57,7 @@ public sealed class ErrorBoundaryTests(E2EFixture fixture) : E2ETestBase(fixture
         await OpenAsync("/wasm-error");
         var explode = Page.GetByRole(AriaRole.Button, new() { Name = "Explode" });
         await explode.ClickAsync();
-        var session = (await WaitForReferenceLogAsync(await ReadReferenceAsync())).ScopeText("BlazorClientSessionId");
+        var session = (await WaitForReferenceLogAsync(await ReadReferenceAsync())).FieldText("session.id");
         Assert.NotNull(session);
 
         // A second failure on the same runtime orders the check after any report the first failure could have produced.
@@ -54,7 +65,7 @@ public sealed class ErrorBoundaryTests(E2EFixture fixture) : E2ETestBase(fixture
         await explode.ClickAsync();
         await WaitForReferenceLogAsync(await ReadReferenceAsync());
 
-        Assert.False(Fixture.Exists(e => e.ScopeText("BlazorClientSessionId") == session && e.ScopeText("BlazorExceptionMessage") == "wasm boom" && e.ScopeText("BlazorBoundaryName") != "WasmBoundary"));
+        Assert.False(Fixture.Exists(e => e.FieldText("session.id") == session && e.FieldText("blazor.exception.message") == "wasm boom" && e.FieldText("blazor.boundary.name") != "WasmBoundary"));
     }
 
     [Theory]

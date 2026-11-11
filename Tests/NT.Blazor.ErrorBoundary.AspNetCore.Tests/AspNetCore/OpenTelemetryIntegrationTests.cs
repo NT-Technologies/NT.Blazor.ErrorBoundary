@@ -15,7 +15,7 @@ namespace NT.Blazor.ErrorBoundary.AspNetCore.Tests.AspNetCore;
 
 public sealed class OpenTelemetryIntegrationTests {
     [Fact]
-    public async Task ServerException_ExportsOriginalExceptionScopesAndTraceCorrelation() {
+    public async Task ServerException_ExportsOriginalExceptionFieldsAndTraceCorrelation() {
         var logs = new List<LogRecord>();
         var spans = new List<Activity>();
         using var source = new ActivitySource("ErrorBoundary.Tests.Server");
@@ -25,7 +25,6 @@ public sealed class OpenTelemetryIntegrationTests {
             .Build();
         var services = new ServiceCollection();
         services.AddLogging(logging => logging.AddOpenTelemetry(options => {
-            options.IncludeScopes = true;
             options.IncludeFormattedMessage = true;
             options.AddInMemoryExporter(logs);
         }));
@@ -55,12 +54,12 @@ public sealed class OpenTelemetryIntegrationTests {
         Assert.Contains("OrderPage", log.FormattedMessage, StringComparison.Ordinal);
         Assert.Equal(span.TraceId, log.TraceId);
         Assert.Equal(span.SpanId, log.SpanId);
-        var fields = ReadScopes(log);
-        Assert.Equal("OrderPage", fields["BlazorBoundaryName"]);
-        Assert.Equal(true, fields["BlazorIsInteractive"]);
-        Assert.Equal("Server", fields["BlazorRenderMode"]);
-        Assert.Equal("https://example.test/orders", fields["BlazorOriginUri"]);
-        Assert.Equal("https://example.test/orders/42", fields["BlazorUri"]);
+        var fields = ReadAttributes(log);
+        Assert.Equal("OrderPage", fields["blazor.boundary.name"]);
+        Assert.Equal(true, fields["blazor.interactive"]);
+        Assert.Equal("Server", fields["blazor.render_mode"]);
+        Assert.Equal("https://example.test/orders", fields["blazor.navigation.origin_url"]);
+        Assert.Equal("https://example.test/orders/42", fields["url.full"]);
     }
 
     [Fact]
@@ -76,7 +75,6 @@ public sealed class OpenTelemetryIntegrationTests {
         builder.Logging.ClearProviders();
         builder.Logging.AddFilter("NT.Blazor.ErrorBoundary.ClientReport", LogLevel.Error);
         builder.Logging.AddOpenTelemetry(options => {
-            options.IncludeScopes = true;
             options.IncludeFormattedMessage = true;
             options.AddInMemoryExporter(logs);
         });
@@ -119,29 +117,20 @@ public sealed class OpenTelemetryIntegrationTests {
         Assert.Equal(log.SpanId, span.SpanId);
         Assert.Equal(ActivityKind.Server, span.Kind);
         Assert.Equal("1234567890abcdef", span.ParentSpanId.ToString());
-        var fields = ReadScopes(log);
-        Assert.Equal(report.ExceptionType, fields["BlazorExceptionType"]);
-        Assert.Equal(report.ExceptionMessage, fields["BlazorExceptionMessage"]);
-        Assert.Equal(report.ExceptionStackTrace, fields["BlazorExceptionStackTrace"]);
-        Assert.Equal(report.ExceptionDetails, fields["BlazorExceptionDetails"]);
-        Assert.Equal(report.BoundaryName, fields["BlazorBoundaryName"]);
-        Assert.Equal(report.RenderMode, fields["BlazorRenderMode"]);
-        Assert.Equal(report.ApplicationVersion, fields["ApplicationVersion"]);
-        Assert.Equal(report.ClientSessionId, fields["BlazorClientSessionId"]);
-        Assert.Equal(report.NavigationId, fields["BlazorNavigationId"]);
-        Assert.Equal(report.OccurredAtUtc, fields["BlazorOccurredAtUtc"]);
-        Assert.Equal("/api/errors", fields["RequestPath"]);
-        Assert.Equal(log.TraceId.ToString(), fields["TraceId"]);
-        Assert.Equal(log.SpanId.ToString(), fields["SpanId"]);
+        var fields = ReadAttributes(log);
+        Assert.Equal(report.ExceptionType, fields["blazor.exception.type"]);
+        Assert.Equal(report.ExceptionMessage, fields["blazor.exception.message"]);
+        Assert.Equal(report.ExceptionStackTrace, fields["blazor.exception.stacktrace"]);
+        Assert.Equal(report.ExceptionDetails, fields["blazor.exception.details"]);
+        Assert.Equal(report.BoundaryName, fields["blazor.boundary.name"]);
+        Assert.Equal(report.RenderMode, fields["blazor.render_mode"]);
+        Assert.Equal(report.ApplicationVersion, fields["blazor.app.version"]);
+        Assert.Equal(report.ClientSessionId, fields["microsoft.session.id"]);
+        Assert.Matches("^[0-9a-f]{16}$", Assert.IsType<string>(fields["blazor.error.fingerprint"]));
+        Assert.Equal(report.NavigationId, fields["blazor.navigation.id"]);
+        Assert.Equal(report.OccurredAtUtc, fields["blazor.error.occurred_at"]);
     }
 
-    private static Dictionary<string, object?> ReadScopes(LogRecord log) {
-        var fields = new Dictionary<string, object?>(StringComparer.Ordinal);
-        log.ForEachScope((scope, state) => {
-            foreach (var field in scope) {
-                state[field.Key] = field.Value;
-            }
-        }, fields);
-        return fields;
-    }
+    // Scopes stay disabled in these tests: the fields must arrive as attributes because exporters such as Azure Monitor omit scopes by default.
+    private static Dictionary<string, object?> ReadAttributes(LogRecord log) => log.Attributes!.ToDictionary(field => field.Key, field => field.Value, StringComparer.Ordinal);
 }

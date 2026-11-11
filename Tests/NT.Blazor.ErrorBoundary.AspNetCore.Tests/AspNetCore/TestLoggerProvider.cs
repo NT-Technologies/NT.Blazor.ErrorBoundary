@@ -37,7 +37,8 @@ internal sealed class TestLoggerProvider : ILoggerProvider, ISupportExternalScop
                 formatter(state, exception),
                 exception,
                 state,
-                scopes));
+                scopes,
+                System.Diagnostics.Activity.Current?.TraceId.ToString()));
         }
     }
 }
@@ -49,9 +50,11 @@ internal sealed record TestLogEntry(
     string Message,
     Exception? Exception,
     object? State,
-    IReadOnlyList<object?> Scopes) {
+    IReadOnlyList<object?> Scopes,
+    string? TraceId) {
 
-    public IReadOnlyDictionary<string, object?> ScopeValues => Flatten(Scopes);
+    // Entry fields win over scope values, matching how exporters merge them.
+    public IReadOnlyDictionary<string, object?> Values => Flatten([.. Scopes, State]);
 
     private static IReadOnlyDictionary<string, object?> Flatten(IEnumerable<object?> values) {
         var flattened = new Dictionary<string, object?>(StringComparer.Ordinal);

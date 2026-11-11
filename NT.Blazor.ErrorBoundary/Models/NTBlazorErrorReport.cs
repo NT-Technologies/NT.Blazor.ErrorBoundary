@@ -1,12 +1,20 @@
 using NT.Blazor.ErrorBoundary.Services;
+using System.Reflection;
 
 namespace NT.Blazor.ErrorBoundary.Models;
 
 /// <summary>
 /// Describes an unhandled Blazor or browser exception reported from a client-side render mode.
+/// Use <c>with</c> to make a redacted copy, for example in <see cref="NTBlazorErrorBoundaryHttpClientOptions.FilterReport"/>.
 /// </summary>
-public sealed class NTBlazorErrorReport {
+public sealed record NTBlazorErrorReport {
     private const string TruncatedReportFieldMessage = "\n... report field truncated ...";
+
+    // The entry assembly's informational version, which the .NET SDK sets to the project version and the source commit. Read in the process that raises the
+    // error, so it is the server app's on the server and the WebAssembly app's in the browser.
+    internal static readonly string? EntryAssemblyVersion = Assembly.GetEntryAssembly() is { } assembly
+        ? assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? assembly.GetName().Version?.ToString()
+        : null;
 
     /// <summary>
     /// Gets the deployed application version.
@@ -129,13 +137,14 @@ public sealed class NTBlazorErrorReport {
     public string? Uri { get; init; }
 
     /// <summary>
-    /// Creates a report from an exception and boundary context.
+    /// Creates a report from an exception and boundary context, with <see cref="ApplicationVersion"/> set to this process's entry assembly version.
     /// </summary>
     public static NTBlazorErrorReport FromException(Exception exception, NTBlazorErrorBoundaryContext context, int maxFieldLength = NTBlazorErrorBoundaryHttpClientOptions.DefaultMaxReportFieldLength) {
         ArgumentNullException.ThrowIfNull(exception);
         ArgumentNullException.ThrowIfNull(context);
 
         return new NTBlazorErrorReport {
+            ApplicationVersion = Truncate(EntryAssemblyVersion, maxFieldLength),
             BoundaryName = Truncate(context.BoundaryName, maxFieldLength),
             ExceptionDetails = Truncate(exception.ToString(), maxFieldLength),
             ExceptionMessage = Truncate(exception.Message, maxFieldLength),
@@ -157,7 +166,7 @@ public sealed class NTBlazorErrorReport {
         ArgumentNullException.ThrowIfNull(context);
 
         return Copy(
-            applicationVersion: context.ApplicationVersion,
+            applicationVersion: ApplicationVersion ?? context.ApplicationVersion,
             breadcrumbs: context.Breadcrumbs,
             clientSessionId: context.ClientSessionId,
             isOnline: context.IsOnline,
@@ -189,6 +198,11 @@ public sealed class NTBlazorErrorReport {
             Uri,
             maxFieldLength);
     }
+
+    /// <summary>
+    /// Returns the report kind, exception type, and reference ID only, so a report written to a log does not carry its messages, stack traces, or URIs.
+    /// </summary>
+    public override string ToString() => $"{nameof(NTBlazorErrorReport)} {{ ReportKind = {ReportKind}, ExceptionType = {ExceptionType}, ReferenceId = {ReferenceId} }}";
 
     private NTBlazorErrorReport Copy(string? applicationVersion, IReadOnlyList<NTBlazorBreadcrumb> breadcrumbs, string? clientSessionId, bool? isOnline, bool? isNavigationIntercepted, string? navigationId, string? navigationPhase, string? originUri, string? targetUri, string? traceParent, string? uri, int maxFieldLength) {
         return new NTBlazorErrorReport {

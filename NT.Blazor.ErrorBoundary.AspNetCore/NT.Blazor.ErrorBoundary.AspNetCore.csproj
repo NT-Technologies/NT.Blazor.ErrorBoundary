@@ -22,6 +22,11 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- Lets AddNTBlazorErrorBoundaryServerLogging register the meter and activity source with whatever OpenTelemetry pipeline the host configures, without depending on the SDK. 1.15.3 is the lowest OpenTelemetry.Api without a known vulnerability; keep the floor low so hosts choose their own SDK version. -->
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Api.ProviderBuilderExtensions" Version="1.15.3" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\NT.Blazor.ErrorBoundary\NT.Blazor.ErrorBoundary.csproj" />
   </ItemGroup>
